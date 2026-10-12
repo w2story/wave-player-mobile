@@ -152,6 +152,7 @@
     let   transOn  = localStorage.getItem('wp7-trans') === 'true';
     let   gemKey   = localStorage.getItem('wp7-gemini') || '';
     let   furiOn   = localStorage.getItem('wp7-furi') === 'true';
+    let   cardOn   = localStorage.getItem('wp7-card') !== 'false';   // phone view: lyrics preview card
 
     // Lyrics font (the Aa button). Web fonts come from Google Fonts; each pairs a Korean and a
     // Japanese face so both scripts match.
@@ -202,7 +203,8 @@
         'End of track': '곡이 끝날 때', '5 minutes': '5분', '10 minutes': '10분', '15 minutes': '15분', '30 minutes': '30분',
         '45 minutes': '45분', '1 hour': '1시간', 'No playlists': '플레이리스트가 없습니다',
         'Lyrics source': '가사 출처', 'Lyrics font…': '가사 글꼴…', 'Automatic': '자동',
-        'Open in phone view': '폰 화면으로 열기', 'Open as mini player': '미니 플레이어로 열기',
+        'Open in phone view': '폰 화면으로 열기',
+        'Fold lyrics preview': '가사 미리 보기 접기', 'Unfold lyrics preview': '가사 미리 보기 펼치기', 'Open as mini player': '미니 플레이어로 열기',
         'Couldn’t set the sleep timer': '수면 타이머를 설정하지 못했습니다', 'Couldn’t add to playlist': '플레이리스트에 추가하지 못했습니다',
         'Couldn’t change following': '팔로우를 변경하지 못했습니다', 'Window sizes reset': '창 크기를 초기화했습니다',
         'Lyrics source: automatic': '가사 출처: 자동',
@@ -1233,6 +1235,8 @@
     const I_TIMER  = svg('<circle cx="12" cy="13.5" r="7.2"/><path d="M12 13.5V9.6M9.6 3.5h4.8"/>', 'st');
     const I_EQ     = '<svg viewBox="0 0 16 16" class="eq"><rect x="1.5" y="7" width="2.6" height="7"/><rect x="6.7" y="3" width="2.6" height="11"/><rect x="11.9" y="5.5" width="2.6" height="8.5"/></svg>';
     const I_VERIFIED = '<svg viewBox="0 0 24 24" class="vf"><path fill="#4cb3ff" d="m12 1.6 2.4 1.8 3-.1.9 2.8 2.5 1.7-.9 2.9.9 2.9-2.5 1.7-.9 2.8-3-.1L12 20.4l-2.4-1.8-3 .1-.9-2.8-2.5-1.7.9-2.9-.9-2.9 2.5-1.7.9-2.8 3 .1z"/><path d="m8.2 12.2 2.6 2.6 5-5.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const I_FOLD   = svg('<path d="m6 9.5 6 6 6-6"/>', 'st');     // collapse
+    const I_UNFOLD = svg('<path d="m6 14.5 6-6 6 6"/>', 'st');    // expand
     const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
 
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
@@ -1633,6 +1637,7 @@
     #fontPop .sl span{font-size:12px;color:rgba(255,255,255,.6);min-width:40px;text-align:right;font-variant-numeric:tabular-nums;}
     .aa{font-size:14px;font-weight:700;letter-spacing:-.02em;}
     #mlh .aa{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.22);color:#fff;margin-right:8px;}
+    #mlh #mHide{margin-right:8px;}
     #mlh .rt{display:flex;align-items:center;}
     #mFontH{display:none;}
     body.v-mobile.pl #mFontH{display:grid;}
@@ -1670,7 +1675,7 @@
     #mhead .wb svg{width:20px;height:20px;}
 
     body.v-mobile #top{order:1;display:flex;flex-direction:column;align-items:stretch;gap:0;padding-top:4px;}
-    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - 620px)));height:auto;aspect-ratio:1;align-self:center;
+    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - var(--artH,620px))));height:auto;aspect-ratio:1;align-self:center;
         border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.45);}
     body.v-mobile #meta{margin:20px 0 0;padding-right:44px;text-align:left;}
     body.v-mobile .ttl{font-size:21px;line-height:28px;font-weight:700;}
@@ -1755,7 +1760,7 @@
        taller, and the line would otherwise sit on its bright, unfaded part.
        --fy = where the lyric line ends (header 52px + the line's box, as sized below). */
     body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);
-        --fy:calc(52px + clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px)));}
+        --fy:calc(52px + clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - var(--capH,470px))));}
     body.v-mobile.canvas #xVid{height:var(--vh);
         -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));
         mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));}
@@ -1764,7 +1769,7 @@
         transparent calc(var(--fy,60%) - 300px),rgba(0,0,0,.5) calc(var(--fy,75%) - 40px),rgba(0,0,0,.25) calc(var(--fy,75%) + 160px),rgba(0,0,0,0) calc(var(--fy,75%) + 260px));}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
-        height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
+        height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - var(--capH,470px)));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 3px rgba(0,0,0,.35),0 2px 16px rgba(0,0,0,.55);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
@@ -1777,6 +1782,12 @@
     body.v-mobile.canvas:not(.pl):not(.ps) .ttl{font-size:22px;line-height:28px;}
     body.v-mobile.canvas:not(.pl):not(.ps) #panel{flex:1;min-height:180px;}
     @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
+
+    /* Lyrics preview folded: only its header stays; the cover (or the Canvas area) takes the room. */
+    body.v-mobile.nocard:not(.p) #panel{flex:none;min-height:0;}
+    body.v-mobile.nocard:not(.p) #lyrWrap,body.v-mobile.nocard:not(.p) #lyrOff{display:none;}
+    body.v-mobile.nocard:not(.p) #mlh{padding-bottom:12px;}
+    body.v-mobile.nocard{--capH:360px;--artH:500px;}
 
     /* Scrolling page: Now Playing fills the window; artist and credits cards follow it,
        and a mini header with the song and play button appears once the controls scroll away. */
@@ -1950,7 +1961,7 @@
 
   <div id="panel" class="nd">
     <div class="pv" id="pvLyrics">
-      <div id="mlh"><span>Lyrics preview</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
+      <div id="mlh"><span>Lyrics preview</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mHide" title="Fold lyrics preview" aria-label="Fold lyrics preview">${I_FOLD}</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
       <div id="lyrWrap"><div id="lyrScroll" class="${centerLyrics ? 'centered' : ''}" style="--lsz:${fontSize}px"></div></div>
       <div id="lyrOff" title="Lyrics timing">
         <button id="offMinus" title="Lyrics earlier" aria-label="Lyrics earlier">−</button>
@@ -2335,6 +2346,7 @@
             body.classList.toggle('pq', panel === 'queue');
             body.classList.toggle('ps', panel === 'settings');
             doc.documentElement.classList.toggle('vm', v === 'mobile');
+            body.classList.toggle('nocard', !cardOn);
             el.pvLyrics.classList.toggle('show', panel === 'lyrics' || (v === 'mobile' && !panel));
             paintTitle();
             el.pvQueue.classList.toggle('show', panel === 'queue');
@@ -3726,6 +3738,17 @@ void main() {
         // Once a day, quietly.
         if (!full && Date.now() - (+localStorage.getItem('wp7-upd-at') || 0) > 864e5) win.setTimeout(() => checkUpdate(false), 4000);
 
+        // The button in the card's header folds it to just that header, and unfolds it again.
+        function setCard(on) {
+            cardOn = on;
+            localStorage.setItem('wp7-card', on);
+            body.classList.toggle('nocard', !on);
+            el.mHide.innerHTML = on ? I_FOLD : I_UNFOLD;
+            el.mHide.title = el.mHide.ariaLabel = on ? 'Fold lyrics preview' : 'Unfold lyrics preview';
+            if (on && lyr.active) win.requestAnimationFrame(() => scrollToLine(lyr.active, false));
+        }
+        el.mHide.onclick = e => { e.stopPropagation(); setCard(!cardOn); };
+        setCard(cardOn);
         el.togPhone.onclick = () => {
             startPhone = !startPhone;
             el.togPhone.classList.toggle('on', startPhone);
