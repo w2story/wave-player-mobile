@@ -1535,6 +1535,21 @@
     body.v-mobile #mhead button,body.v-mobile #mmini button,body.v-mobile #mmini .mmw,body.v-mobile #mmini .mmw *{
         -webkit-app-region:no-drag;app-region:no-drag;}
 
+    /* Full lyrics background (Aa panel): the cover, blurred, or the Canvas, dimmed.
+       Lyrics turn white-on-dark there, as in Apple Music. Canvas falls back to the cover. */
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xbg{display:block;inset:0;height:auto;z-index:1;}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #mbg{display:none;}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xBlur{display:none;}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xArt{display:block;filter:blur(38px) saturate(1.45) brightness(.6);transform:scale(1.3);}
+    body.v-mobile.pl.lb-cover #xVid{display:none;}
+    body.v-mobile.pl.lb-canvas.canvas #xArt{display:none;}
+    body.v-mobile.pl.lb-canvas.canvas #xVid{height:100%;-webkit-mask-image:none;mask-image:none;filter:brightness(.62) saturate(1.1);}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xShade{display:block;
+        background:linear-gradient(180deg,rgba(0,0,0,.45) 0,rgba(0,0,0,.18) 22%,rgba(0,0,0,.18) 70%,rgba(0,0,0,.55) 100%);}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas){--dim:rgba(255,255,255,.36);}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
+
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
     body.v-mobile.ps #top,body.v-mobile.ps #bottom{display:none;}
@@ -1975,7 +1990,8 @@
         };
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
-        const withCanvas = () => view === 'expanded' || view === 'full' || (view === 'mobile' && (!panel || panel === 'queue'));
+        const withCanvas = () => view === 'expanded' || view === 'full' ||
+            (view === 'mobile' && (!panel || panel === 'queue' || (panel === 'lyrics' && lf.bg === 'canvas')));
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -3037,6 +3053,12 @@ void main() {
             if (!st) { st = doc.createElement('style'); st.id = 'lyrFontCss'; doc.head.appendChild(st); }
             const want = f.q ? `@import url('https://fonts.googleapis.com/css2?family=${f.q}&display=swap');` : '';
             if (st.textContent !== want) st.textContent = want;
+            // Full lyrics background.
+            for (const b of ['color', 'cover', 'canvas']) body.classList.toggle(`lb-${b}`, (lf.bg || 'color') === b);
+            if (view === 'mobile' && panel === 'lyrics') {
+                if (withCanvas() && canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
+                canvasPlay();
+            }
         }
         // The panel previews every face, so all of them load while it's open.
         function previewFonts() {
@@ -3056,6 +3078,9 @@ void main() {
                 <div class="fg">${Object.entries(FONTS).map(([k, f]) => `
                     <button class="ff${lf.font === k ? ' on' : ''}" data-font="${k}" style="font-family:${f.stack ? `${f.stack},` : ''}system-ui,sans-serif">
                       <b>가나 あい Aa</b><i>${f.name}</i></button>`).join('')}</div>
+                <div class="fl">Full lyrics background</div>
+                <div class="seg">${[['color', 'Color'], ['cover', 'Cover'], ['canvas', 'Canvas']].map(([v, t]) =>
+                    `<button data-bg="${v}" class="${(lf.bg || 'color') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
                 <div class="fl">Weight</div>
                 <div class="seg">${W.map(([v, t]) => `<button data-w="${v}" class="${(lf.w || '') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
                 <div class="fl">Size</div>
@@ -3080,6 +3105,7 @@ void main() {
             if (!b) return;
             if (b.dataset.font) lf.font = b.dataset.font;
             else if (b.dataset.w != null) lf.w = b.dataset.w || undefined;
+            else if (b.dataset.bg) lf.bg = b.dataset.bg;
             else if (b.hasAttribute('data-reset')) { for (const k of Object.keys(lf)) delete lf[k]; lf.font = 'system'; setSize(24); }
             fontChanged();
             drawFont();
