@@ -226,7 +226,7 @@
         'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '곡마다 한 번 번역해서 가사와 함께 저장합니다. 키는 Google AI Studio에서 무료로 받을 수 있습니다.',
         'Applies the next time the player opens.': '플레이어를 다시 열면 적용됩니다.',
         // Font panel
-        'Full lyrics background': '전체 가사 배경', 'Color': '단색', 'Cover': '커버', 'Canvas': 'Canvas',
+        'Full lyrics background': '전체 가사 배경', 'Auto': '자동', 'Color': '단색', 'Cover': '커버', 'Canvas': 'Canvas',
         'Weight': '굵기', 'Default': '기본', 'Regular': '보통', 'Bold': '굵게', 'Heavy': '아주 굵게', 'Size': '크기',
         'Line spacing': '줄 간격', 'Pronunciation size': '발음 크기', 'Translation size': '번역 크기',
         'System': '시스템', 'Rounded': '둥근', 'Handwriting': '손글씨',
@@ -2419,7 +2419,7 @@
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
-            (view === 'mobile' && (panel === 'lyrics' ? lf.bg === 'canvas' : (!cvHidden && (!panel || panel === 'queue'))));
+            (view === 'mobile' && (panel === 'lyrics' ? ['canvas', 'auto', undefined].includes(lf.bg) : (!cvHidden && (!panel || panel === 'queue'))));
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -3524,7 +3524,8 @@ void main() {
             const want = f.q ? `@import url('https://fonts.googleapis.com/css2?family=${f.q}&display=swap');` : '';
             if (st.textContent !== want) st.textContent = want;
             // Full lyrics background.
-            for (const b of ['color', 'cover', 'canvas']) body.classList.toggle(`lb-${b}`, (lf.bg || 'color') === b);
+            const bg = lf.bg || 'auto', look = bg === 'auto' ? 'canvas' : bg;
+            for (const b of ['color', 'cover', 'canvas']) body.classList.toggle(`lb-${b}`, look === b);
             if (view === 'mobile' && panel === 'lyrics') {
                 if (withCanvas() && canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
                 canvasPlay();
@@ -3549,8 +3550,8 @@ void main() {
                     <button class="ff${lf.font === k ? ' on' : ''}" data-font="${k}" style="font-family:${f.stack ? `${f.stack},` : ''}system-ui,sans-serif">
                       <b>가나 あい Aa</b><i>${f.name}</i></button>`).join('')}</div>
                 <div class="fl">Full lyrics background</div>
-                <div class="seg">${[['color', 'Color'], ['cover', 'Cover'], ['canvas', 'Canvas']].map(([v, t]) =>
-                    `<button data-bg="${v}" class="${(lf.bg || 'color') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
+                <div class="seg">${[['auto', 'Auto'], ['color', 'Color'], ['cover', 'Cover'], ['canvas', 'Canvas']].map(([v, t]) =>
+                    `<button data-bg="${v}" class="${(lf.bg || 'auto') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
                 <div class="fl">Weight</div>
                 <div class="seg">${W.map(([v, t]) => `<button data-w="${v}" class="${(lf.w || '') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
                 <div class="fl">Size</div>
