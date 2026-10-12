@@ -1825,8 +1825,16 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
 
-    /* Window mode: Spotify's window may be wide, so the page keeps a phone-like column. */
+    /* Window mode: Spotify's window may be wide, so the page keeps a phone-like column, and
+       the space either side is the cover, blurred and dimmed, rather than flat grey. */
     body.dock{--pw:min(100vw,560px);}
+    #dAmb{display:none;}
+    body.dock #dAmb{display:block;position:fixed;inset:-60px;z-index:0;background:#121212 center/cover no-repeat;
+        filter:blur(60px) saturate(1.35) brightness(.42);}
+    body.dock #mbg{left:calc(50% - var(--pw) / 2);right:auto;width:var(--pw);}
+    body.dock{background:#0c0c0c;}
+    /* Narrow window: keep the header clear of Spotify's own window buttons. */
+    @media (max-width:880px){body.dock #mhead{margin-top:30px;}}
     body.dock #main,body.dock #mmore{max-width:560px;margin-left:auto;margin-right:auto;}
     body.dock.canvas:not(.pl):not(.ps) #xbg{left:calc(50% - var(--pw) / 2);right:auto;width:var(--pw);}
     body.dock.pq #panel{left:calc(50% - min(calc(100vw - 20px),540px) / 2);right:auto;width:min(calc(100vw - 20px),540px);}
@@ -1897,6 +1905,7 @@
 </div>
 <div id="xbg"><img id="xArt" alt="" draggable="false"><video id="xVid" muted loop playsinline preload="auto"></video><div id="xBlur"></div><div id="xShade"></div></div>
 <div id="grain"></div>
+<div id="dAmb"></div>
 <div id="mbg"></div>
 
 <div id="main">
@@ -2786,6 +2795,7 @@ void main() {
                 el.art.src = small;
                 el.xArt.src = big || small;
                 el.xBlur.style.backgroundImage = `url('${small.replace(/'/g, "\\'")}')`;
+                el.dAmb.style.backgroundImage = `url('${(big || small).replace(/'/g, "\\'")}')`;
                 setBackground(small);
                 setSwirl(small);
                 requestPalette(small);
