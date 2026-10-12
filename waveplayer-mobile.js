@@ -1498,13 +1498,13 @@
     #mLine.kara .w rt{color:rgba(255,255,255,.9);}
 
     /* Korean reading under the line. */
-    .pron{font-size:calc(var(--pz,.6) * 1em);font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
+    .pron{font-size:calc(var(--pz,.64) * 1em);font-weight:700;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
         -webkit-text-fill-color:currentColor;}
-    .lyric:not(.active) .pron{opacity:.85;}
+    .lyric:not(.active) .pron{opacity:.92;}
     .trans{font-size:calc(var(--tz,.62) * 1em);font-weight:500;letter-spacing:0;line-height:1.35;margin-top:4px;white-space:normal;
         -webkit-text-fill-color:currentColor;opacity:.82;}
     #mLine .trans{font-size:calc(var(--tz,.62) * 1.1em);}
-    #mLine .pron{font-size:calc(var(--pz,.6) * 1.1em);margin-top:4px;}
+    #mLine .pron{font-size:calc(var(--pz,.64) * 1.1em);margin-top:4px;}
     .lyric.kara.active .w{
         background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.36) var(--p,0%) 100%);
         -webkit-background-clip:text;background-clip:text;
@@ -1526,8 +1526,9 @@
     .lyric.kara .pron,#mLine.kara .pron{width:fit-content;}
     #lyrScroll.centered .lyric.kara .pron{margin-left:auto;margin-right:auto;}
     html body .lyric.kara.active .pron,html body #mLine.kara .pron{
-        background-image:linear-gradient(90deg,#fff 0 var(--pp,0%),rgba(255,255,255,.5) var(--pp,0%) 100%);
-        -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;opacity:1;}
+        background-image:linear-gradient(90deg,#fff 0 var(--pp,0%),rgba(255,255,255,.72) var(--pp,0%) 100%);
+        -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;opacity:1;
+        filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.45));}
     @media (prefers-reduced-motion:reduce){.lyric.kara .w,#mLine.kara .w{transition:none;transform:none !important;}}
 
     /* Up Next */
@@ -3495,7 +3496,7 @@ void main() {
         }
         function drawFont() {
             const W = [['', 'Default'], ['500', 'Regular'], ['700', 'Bold'], ['900', 'Heavy']];
-            const lh = lf.lh || 1.3, pz = lf.pz || .6;
+            const lh = lf.lh || 1.3, pz = lf.pz || .64;
             el.fontPop.innerHTML = `
                 <div class="fh"><span class="ft">Lyrics font</span><button class="fr" data-reset>Reset</button></div>
                 <div class="fg">${Object.entries(FONTS).map(([k, f]) => `
