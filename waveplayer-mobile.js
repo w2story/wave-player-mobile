@@ -116,7 +116,11 @@
     ];
 
     // Settings keep their old wp7-* keys so existing installs keep them.
-    let mode         = ['expanded', 'mobile'].includes(localStorage.getItem('wp7-mode')) ? localStorage.getItem('wp7-mode') : 'compact';
+    // The phone view is where the player opens, unless that's switched off in Settings
+    // (then it reopens in whichever view was used last).
+    let startPhone   = localStorage.getItem('wp7-start-phone') !== 'false';
+    let mode         = startPhone ? 'mobile'
+        : ['expanded', 'mobile'].includes(localStorage.getItem('wp7-mode')) ? localStorage.getItem('wp7-mode') : 'compact';
     let centerLyrics = localStorage.getItem('wp7-center') !== 'false';
     let fontSize     = parseInt(localStorage.getItem('wp7-fs') || '24');
     let canvasOn     = localStorage.getItem('wp7-canvas') !== 'false';
@@ -131,11 +135,13 @@
     };
 
     // Lyric sources in default order.
-    const PROVIDERS = ['spotify', 'lrclib', 'netease', 'musixmatch'];
+    const PROVIDERS = ['lyricsplus', 'spotify', 'lrclib', 'netease', 'musixmatch'];
 
     // Saved order, with unknown names dropped and new sources appended.
     const provOrder = (() => {
         const saved = (localStorage.getItem('wp7-prov') || '').split(',').filter(p => PROVIDERS.includes(p));
+        // LyricsPlus (syllable lyrics) goes to the top of an order saved before it existed.
+        if (saved.length && !saved.includes('lyricsplus')) saved.unshift('lyricsplus');
         return [...saved, ...PROVIDERS.filter(p => !saved.includes(p))];
     })();
     const provOff  = new Set((localStorage.getItem('wp7-prov-off') || '').split(',').filter(Boolean));
@@ -196,7 +202,7 @@
         'End of track': '곡이 끝날 때', '5 minutes': '5분', '10 minutes': '10분', '15 minutes': '15분', '30 minutes': '30분',
         '45 minutes': '45분', '1 hour': '1시간', 'No playlists': '플레이리스트가 없습니다',
         'Lyrics source': '가사 출처', 'Lyrics font…': '가사 글꼴…', 'Automatic': '자동',
-        'Open in Spotify window': 'Spotify 창에서 열기 (최대 높이)', 'Open as mini player': '미니 플레이어로 열기',
+        'Open in Spotify window': 'Spotify 창에서 열기 (최대 높이)', 'Open in phone view': '폰 화면으로 열기', 'Open as mini player': '미니 플레이어로 열기',
         'Couldn’t set the sleep timer': '수면 타이머를 설정하지 못했습니다', 'Couldn’t add to playlist': '플레이리스트에 추가하지 못했습니다',
         'Couldn’t change following': '팔로우를 변경하지 못했습니다', 'Window sizes reset': '창 크기를 초기화했습니다',
         'Lyrics source: automatic': '가사 출처: 자동',
@@ -212,7 +218,7 @@
         'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': '커버와 컨트롤을 숨깁니다. 스페이스로 재생/일시정지, 화살표로 5초 이동합니다.',
         'Spotify\'s looping video for songs that have one. Other songs keep the cover.': 'Canvas 영상이 있는 곡은 영상을, 없는 곡은 커버를 보여줍니다.',
         'Controls fade after a few seconds without the mouse moving, and come back when it does.': '마우스를 몇 초간 움직이지 않으면 컨트롤이 사라지고, 움직이면 다시 나타납니다.',
-        'Sources are tried top to bottom until one has synced lyrics. NetEase and Musixmatch are the ones that carry word timings.': '위에서부터 차례로 찾습니다. 음절 타이밍은 NetEase와 Musixmatch에 있습니다.',
+        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, NetEase and Musixmatch are the ones that carry word timings.': '위에서부터 차례로 찾습니다. 음절 타이밍은 LyricsPlus(Apple Music 등), NetEase, Musixmatch에 있습니다.',
         'Each view remembers the size you resize it to. Reset puts them all back.': '보기마다 조절한 창 크기를 기억합니다. 초기화하면 기본 크기로 돌아갑니다.',
         'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '곡마다 한 번 번역해서 가사와 함께 저장합니다. 키는 Google AI Studio에서 무료로 받을 수 있습니다.',
         'Applies the next time the player opens.': '플레이어를 다시 열면 적용됩니다.',
@@ -242,7 +248,7 @@
         [/^Lyrics from (.+) for this song$/, m => `이 곡은 ${m[1]} 가사를 사용합니다`],
         [/^([\d,.]+) monthly listeners$/, m => `월별 청취자 ${m[1]}명`],
         [/^(✓ )?Automatic(?: \((.+)\))?$/, m => `${m[1] || ''}자동${m[2] ? ` (${m[2]})` : ''}`],
-        [/^(✓ )?(Spotify|LRCLIB|NetEase|Musixmatch) · (.+)$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}`],
+        [/^(✓ )?(LyricsPlus|Spotify|LRCLIB|NetEase|Musixmatch) · (.+?)( \(.+\))?$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}${m[4] || ''}`],
         [/^(.+ • .+)$/, m => m[1].split(' • ').map(tr).join(' • ')],
         [/^Update available: (.+)$/, m => `새 버전이 있습니다: ${m[1]}`],
         [/^Up to date \((.+)\)$/, m => `최신 버전입니다 (${m[1]})`],
@@ -583,6 +589,69 @@
         return null;
     }
 
+    // LyricsPlus (KPoe): an open lyrics server that gathers syllable-timed lyrics, Apple Music's
+    // first, then Musixmatch, Spotify, QQ and more. Mirrors are tried in turn.
+    const KPOE = [
+        'https://lyricsplus.binimum.org',
+        'https://lyricsplus-seven.vercel.app',
+        'https://lyricsplus.prjktla.workers.dev',
+        'https://lyrics-plus-backend.vercel.app',
+    ];
+    const kpoeMs = (v, base = 0) => {
+        const n = Number(v);
+        if (!Number.isFinite(n)) return base;
+        return Number.isInteger(n) ? Math.max(0, n) : Math.round(n * 1000);
+    };
+    async function fromLyricsPlus(track) {
+        const title = titleOf(track), artist = artistOf(track);
+        if (!title || !artist) return null;
+        const q = new URLSearchParams({ title, artist });
+        if (albumOf(track)) q.set('album', albumOf(track));
+        if (secs(track)) q.set('duration', String(secs(track)));
+        let j = null;
+        for (const base of KPOE) {
+            try {
+                const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 6000);
+                const res = await fetch(`${base}/v2/lyrics/get?${q}`, { signal: ctl.signal }).finally(() => clearTimeout(tm));
+                if (res.status === 404) return null;        // answered: no lyrics
+                if (!res.ok) continue;
+                j = await res.json();
+                break;
+            } catch {}
+        }
+        const raw = Array.isArray(j?.lyrics) ? j.lyrics : Array.isArray(j?.data?.lyrics) ? j.data.lyrics : null;
+        if (!raw?.length) return null;
+        const type = String(j.type || '').toLowerCase();
+        const lines = [];
+        for (const e of raw) {
+            if (!e) continue;
+            const t = kpoeMs(e.time), d = kpoeMs(e.duration);
+            const syl = (Array.isArray(e.syllabus) ? e.syllabus : Array.isArray(e.words) ? e.words : []).filter(x => x && !x.isBackground);
+            const text = (typeof e.text === 'string' && e.text.trim()) ? e.text.trim() : syl.map(x => x.text || '').join('').trim();
+            if (!text) { lines.push(mkLine(t, '')); continue; }
+            let words = null;
+            if (type !== 'line' && syl.length > 1) {
+                // Line the syllables up with the line's text, keeping the spaces between words.
+                words = [];
+                let at = 0;
+                for (const x of syl) {
+                    const core = String(x.text || '').trim();
+                    if (!core) continue;
+                    const i = text.indexOf(core, at);
+                    if (i > at && words.length) words[words.length - 1].text += text.slice(at, i);
+                    at = i >= 0 ? i + core.length : at;
+                    words.push({ t: kpoeMs(x.time, t), d: kpoeMs(x.duration) || null, text: core });
+                }
+                if (words.length < 2) words = null;
+            }
+            lines.push(mkLine(t, text, words, d || undefined));
+        }
+        if (!lines.some(l => l.text)) return null;
+        // Untimed lyrics come back with every time at 0.
+        const synced = type !== 'static' && type !== 'none' && lines.some(l => l.t > 0);
+        return { synced, lines, via: j?.metadata?.source || null };
+    }
+
     // Musixmatch: only with a user token from Settings.
     async function fromMusixmatch(track) {
         if (!mxmToken || !titleOf(track)) return null;
@@ -613,8 +682,9 @@
         return null;
     }
 
-    const PROV_NAMES = { spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
+    const PROV_NAMES = { lyricsplus: 'LyricsPlus', spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
     const SOURCES = {
+        lyricsplus: fromLyricsPlus,
         spotify: fromSpotify, lrclib: fromLrclib,
         netease: fromNetease, musixmatch: fromMusixmatch,
     };
@@ -1928,7 +1998,7 @@
             <input class="stok" id="mxmTok" type="password" placeholder="optional" value="${mxmToken.replace(/[^\w.-]/g,'')}" spellcheck="false"></div>
         </div>
         <div class="shint">Sources are tried top to bottom until one has synced lyrics.
-          NetEase and Musixmatch are the ones that carry word timings.</div>
+          LyricsPlus, NetEase and Musixmatch are the ones that carry word timings.</div>
 
         <div class="stitle">Language</div>
         <div class="scard">
@@ -1949,6 +2019,7 @@
 
         <div class="stitle pipOnly">Window</div>
         <div class="scard pipOnly">
+          <div class="sr"><span class="slbl">Open in phone view</span><div class="tog ${startPhone?'on':''}" id="togPhone"></div></div>
           <div class="sr"><span class="slbl">Window sizes</span><button class="sbtn" id="sizeReset">Reset</button></div>
         </div>
         <div class="shint pipOnly">Each view remembers the size you resize it to. Reset puts them all back.</div>
@@ -2025,6 +2096,7 @@
             return;
         }
         currentTrackUri = null;
+        if (startPhone) mode = 'mobile';
         // Only one PiP window is allowed; close Spotify's own first.
         const held = window.documentPictureInPicture.window;
         if (held && !held.closed) {
@@ -3097,7 +3169,9 @@ void main() {
                 const e = set.results[n];
                 if (!e) return 'not asked';
                 const r = e.r;
-                return !r ? 'not found' : r.karaoke ? 'word synced' : r.synced ? 'line synced' : 'not synced';
+                const how = !r ? 'not found' : r.karaoke ? 'word synced' : r.synced ? 'line synced' : 'not synced';
+                const via = r?.via ? String(r.via).replace(/^q?apple$/i, 'Apple Music') : '';
+                return via ? `${how} (${via})` : how;
             };
             const shown = currentLyrics?.source;
             renderMenu([
@@ -3605,6 +3679,11 @@ void main() {
         // Once a day, quietly.
         if (!full && Date.now() - (+localStorage.getItem('wp7-upd-at') || 0) > 864e5) win.setTimeout(() => checkUpdate(false), 4000);
 
+        el.togPhone.onclick = () => {
+            startPhone = !startPhone;
+            el.togPhone.classList.toggle('on', startPhone);
+            localStorage.setItem('wp7-start-phone', startPhone);
+        };
         el.langSel.onchange = e => {
             try { localStorage.setItem('wp7-lang', e.target.value); } catch {}
             toast(e.target.value === 'en' ? 'Applies the next time the player opens.' : '플레이어를 다시 열면 적용됩니다.');
