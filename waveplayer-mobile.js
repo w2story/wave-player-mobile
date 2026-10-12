@@ -1752,8 +1752,9 @@
     body.v-mobile.pl .ttl{font-size:15px;line-height:20px;}
     body.v-mobile.pl .sub{font-size:13px;line-height:18px;}
     body.v-mobile.pl #bottom{order:4;}
-    body.v-mobile.pl .grp.l,body.v-mobile.pl .grp.r,body.v-mobile.pl .ms{display:none;}
-    body.v-mobile.pl .grp.c{justify-content:center;gap:34px;height:62px;}
+    body.v-mobile.pl .grp.l,body.v-mobile.pl .grp.r{display:none;}
+    /* Shuffle and repeat stay, either side of previous / play / next. */
+    body.v-mobile.pl .grp.c{justify-content:space-between;gap:0;height:62px;}
     body.v-mobile.pl #bPlay{width:54px;height:54px;}
 
     /* With the cover: cover, current line, then titles, as on the phone. */
