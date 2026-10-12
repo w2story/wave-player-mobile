@@ -1,11 +1,20 @@
 [
   {
-    "name": "Wave Player",
-    "description": "Apple Music–style mini player for Spotify that floats on top of everything. Compact, expanded and full screen views, word-by-word synced lyrics, animated covers, Up Next and a living background from the album art.",
+    "name": "Wave Player Mobile",
+    "description": "Wave Player with a Spotify phone-style view: Canvas or cover screen, lyrics card and full lyrics, Korean pronunciation, furigana, AI translation (Gemini), queue sheet, artist and credits cards.",
     "preview": "thumbnail.png",
-    "main": "waveplayer.js",
+    "main": "waveplayer-mobile.js",
     "readme": "README.md",
-    "authors": [{ "name": "Sam", "url": "https://github.com/03x1" }],
+    "authors": [
+      {
+        "name": "Sam (original)",
+        "url": "https://github.com/03x1"
+      },
+      {
+        "name": "__OWNER__",
+        "url": "https://github.com/__OWNER__"
+      }
+    ],
     "tags": [
       "miniplayer",
       "lyrics",
@@ -23,7 +32,12 @@
       "canvas",
       "animated cover",
       "queue",
-      "up next"
+      "up next",
+      "mobile",
+      "translation",
+      "furigana",
+      "pronunciation",
+      "korean"
     ]
   }
 ]

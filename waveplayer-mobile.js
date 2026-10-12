@@ -27,6 +27,9 @@
     // To release: bump VERSION and add an entry at the top of CHANGELOG.
     // summary = short list on the update screen; notes = full changelog.
     const VERSION = 'v3';
+    // This edition (phone view, translation, …): its own version and where updates come from.
+    const MOBILE_VERSION = '1.0.0';
+    const REPO = '__REPO__';
 
     const CHANGELOG = [
         {
@@ -140,6 +143,9 @@
     let   karaoke  = localStorage.getItem('wp7-kara') !== 'false';
     let   pronJa   = localStorage.getItem('wp7-pron-ja') !== 'false';
     let   pronEn   = localStorage.getItem('wp7-pron-en') !== 'false';
+    let   transOn  = localStorage.getItem('wp7-trans') === 'true';
+    let   gemKey   = localStorage.getItem('wp7-gemini') || '';
+    let   furiOn   = localStorage.getItem('wp7-furi') === 'true';
 
     // Lyrics font (the Aa button). Web fonts come from Google Fonts; each pairs a Korean and a
     // Japanese face so both scripts match.
@@ -154,6 +160,101 @@
     const lf = (() => { try { return JSON.parse(localStorage.getItem('wp7-lfont') || '{}'); } catch { return {}; } })();
     if (!FONTS[lf.font]) lf.font = 'system';
     const saveLf = () => { try { localStorage.setItem('wp7-lfont', JSON.stringify(lf)); } catch {} };
+
+
+    /* Interface language. "auto" follows Spotify's language; Korean and English are built in.
+       English is written in place; Korean comes from this table (exact phrases), then from
+       the patterns below (phrases with a name or number in them). */
+
+    const langPref = () => localStorage.getItem('wp7-lang') || 'auto';
+    const pickLang = () => {
+        const v = langPref();
+        if (v !== 'auto') return v;
+        const loc = String(Spicetify.Locale?.getLocale?.() || navigator.language || '').toLowerCase();
+        return loc.startsWith('ko') ? 'ko' : 'en';
+    };
+    let lang = pickLang();
+    const KO = {
+        // Player
+        'Loading…': '불러오는 중…', 'Now Playing': '재생 중', 'Unknown': '알 수 없음',
+        'Play': '재생', 'Pause': '일시정지', 'Previous': '이전', 'Next': '다음', 'Volume': '볼륨', 'Mute': '음소거',
+        'More': '더 보기', 'More options': '더 보기', 'Lyrics': '가사', 'Lyrics preview': '가사 미리 보기', 'Full lyrics': '가사 전체 보기',
+        'Playing Next': '재생목록', 'Close player': '플레이어 닫기', 'Expand': '크게 보기', 'Back to mini player': '미니 플레이어로',
+        'Back': '뒤로', 'Phone view': '모바일 화면', 'Settings': '설정', 'Done': '완료', 'Reset': '초기화',
+        'Shuffle': '셔플', 'Shuffle on': '셔플 켜짐', 'Smart shuffle': '스마트 셔플', 'Smart': '스마트',
+        'Repeat': '반복하기', 'Repeat all': '전체 반복', 'Repeat one': '한 곡 반복', 'Timer': '타이머',
+        'Not available during autoplay': '자동 재생 중에는 사용할 수 없습니다', 'Not available for this music': '이 음악에서는 사용할 수 없습니다',
+        'Save to Liked Songs': '좋아요 표시한 곡에 저장', 'Remove from Liked Songs': '좋아요 표시한 곡에서 삭제',
+        'Liked Songs': '좋아요 표시한 곡', 'Your Episodes': '내 에피소드',
+        'Lyrics earlier': '가사 빠르게', 'Lyrics later': '가사 느리게', 'Lyrics timing': '가사 타이밍', 'Lyrics font': '가사 글꼴',
+        'Queue': '대기열', 'Up Next': '다음 재생', 'Nothing up next': '다음 곡이 없습니다', 'No lyrics available': '가사가 없습니다',
+        // Menu
+        'Add to Playlist': '플레이리스트에 추가하기', 'Go to Album': '앨범으로 이동', 'Go to Artist': '아티스트로 이동',
+        'Go to Show': '쇼로 이동', 'Copy Song Link': '곡 링크 복사하기', 'Copy Episode Link': '에피소드 링크 복사하기',
+        'Link copied': '링크를 복사했습니다', 'Sleep timer': '수면 타이머', 'Sleep timer off': '수면 타이머를 껐습니다',
+        'Sleep timer · end of track': '수면 타이머 · 곡이 끝날 때', 'Turn off': '끄기', '‹ Back': '‹ 뒤로',
+        'End of track': '곡이 끝날 때', '5 minutes': '5분', '10 minutes': '10분', '15 minutes': '15분', '30 minutes': '30분',
+        '45 minutes': '45분', '1 hour': '1시간', 'No playlists': '플레이리스트가 없습니다',
+        'Lyrics source': '가사 출처', 'Lyrics font…': '가사 글꼴…', 'Automatic': '자동',
+        'Open in Spotify window': 'Spotify 창에서 열기 (최대 높이)', 'Open as mini player': '미니 플레이어로 열기',
+        'Couldn’t set the sleep timer': '수면 타이머를 설정하지 못했습니다', 'Couldn’t add to playlist': '플레이리스트에 추가하지 못했습니다',
+        'Couldn’t change following': '팔로우를 변경하지 못했습니다', 'Window sizes reset': '창 크기를 초기화했습니다',
+        'Lyrics source: automatic': '가사 출처: 자동',
+        // Settings
+        'Full screen': '전체 화면', 'Lyrics only': '가사만 보기', 'Background': '배경', 'Movement speed': '움직임 속도', 'Still': '정지',
+        'Expanded view': '크게 보기', 'Animated covers': '움직이는 커버 (Canvas)', 'Center lyrics': '가사 가운데 정렬',
+        'Pronunciation · Japanese': '발음 · 일본어', 'Pronunciation · English': '발음 · 영어', 'Furigana': '후리가나 (한자 읽기)',
+        'Translation': '번역', 'Translate lyrics': '가사 번역', 'Gemini API key': 'Gemini API 키', 'optional': '선택',
+        'Lyrics size': '가사 크기', 'Change…': '변경…', 'Timing for this song': '이 곡의 타이밍',
+        'Auto-hide controls': '컨트롤 자동 숨김', 'Compact': '작게', 'Expanded': '크게', 'Lyric sources': '가사 출처',
+        'Word-by-word sync': '음절 단위 싱크', 'Musixmatch token': 'Musixmatch 토큰', 'Window': '창', 'Window sizes': '창 크기',
+        'Language': '언어', 'Updates': '업데이트', 'Check for updates': '업데이트 확인', 'Check': '확인',
+        'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': '커버와 컨트롤을 숨깁니다. 스페이스로 재생/일시정지, 화살표로 5초 이동합니다.',
+        'Spotify\'s looping video for songs that have one. Other songs keep the cover.': 'Canvas 영상이 있는 곡은 영상을, 없는 곡은 커버를 보여줍니다.',
+        'Controls fade after a few seconds without the mouse moving, and come back when it does.': '마우스를 몇 초간 움직이지 않으면 컨트롤이 사라지고, 움직이면 다시 나타납니다.',
+        'Sources are tried top to bottom until one has synced lyrics. NetEase and Musixmatch are the ones that carry word timings.': '위에서부터 차례로 찾습니다. 음절 타이밍은 NetEase와 Musixmatch에 있습니다.',
+        'Each view remembers the size you resize it to. Reset puts them all back.': '보기마다 조절한 창 크기를 기억합니다. 초기화하면 기본 크기로 돌아갑니다.',
+        'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '곡마다 한 번 번역해서 가사와 함께 저장합니다. 키는 Google AI Studio에서 무료로 받을 수 있습니다.',
+        'Applies the next time the player opens.': '플레이어를 다시 열면 적용됩니다.',
+        // Font panel
+        'Full lyrics background': '전체 가사 배경', 'Color': '단색', 'Cover': '커버', 'Canvas': 'Canvas',
+        'Weight': '굵기', 'Default': '기본', 'Regular': '보통', 'Bold': '굵게', 'Heavy': '아주 굵게', 'Size': '크기',
+        'Line spacing': '줄 간격', 'Pronunciation size': '발음 크기', 'Translation size': '번역 크기',
+        'System': '시스템', 'Rounded': '둥근', 'Handwriting': '손글씨',
+        // Cards
+        'About the artist': '아티스트 상세정보', 'Credits': '크레딧', 'Follow': '팔로우하기', 'Following': '팔로잉',
+        'Main artist': '메인 아티스트', 'Featured artist': '피처링 아티스트', 'Vocals': '보컬', 'Lyricist': '작사가', 'Composer': '작곡가',
+        'Arranger': '어레인저', 'Producer': '프로듀서', 'Writer': '작가', 'Performers': '퍼포머', 'Writers': '작가',
+        'Producers': '프로듀서', 'Mixing engineer': '믹싱 엔지니어', 'Mastering engineer': '마스터링 엔지니어',
+        // Source status
+        'word synced': '음절 싱크', 'line synced': '줄 싱크', 'not synced': '싱크 없음', 'not found': '없음',
+        'searching…': '찾는 중…', 'needs token': '토큰 필요', 'off': '꺼짐', 'not asked': '확인 안 함',
+    };
+    const KO_RE = [
+        [/^Saved to (.+)$/, m => `${tr(m[1])}에 저장했습니다`],
+        [/^Removed from (.+)$/, m => `${tr(m[1])}에서 삭제했습니다`],
+        [/^Remove from (.+)$/, m => `${tr(m[1])}에서 삭제`],
+        [/^Save to (.+)$/, m => `${tr(m[1])}에 저장`],
+        [/^Added to (.+)$/, m => `${m[1]}에 추가했습니다`],
+        [/^Volume (\d+)%$/, m => `볼륨 ${m[1]}%`],
+        [/^Sleep timer · (\d+) min$/, m => `수면 타이머 · ${m[1]}분`],
+        [/^Sleep timer: (.+)$/, m => `수면 타이머: ${tr(m[1].replace(/^./, c => c.toUpperCase()))}`],
+        [/^Lyrics from (.+) for this song$/, m => `이 곡은 ${m[1]} 가사를 사용합니다`],
+        [/^([\d,.]+) monthly listeners$/, m => `월별 청취자 ${m[1]}명`],
+        [/^(✓ )?Automatic(?: \((.+)\))?$/, m => `${m[1] || ''}자동${m[2] ? ` (${m[2]})` : ''}`],
+        [/^(✓ )?(Spotify|LRCLIB|NetEase|Musixmatch) · (.+)$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}`],
+        [/^(.+ • .+)$/, m => m[1].split(' • ').map(tr).join(' • ')],
+        [/^Update available: (.+)$/, m => `새 버전이 있습니다: ${m[1]}`],
+        [/^Up to date \((.+)\)$/, m => `최신 버전입니다 (${m[1]})`],
+    ];
+    function tr(str) {
+        if (lang !== 'ko' || !str) return str;
+        const k = String(str).replace(/\s+/g, ' ').trim();
+        if (!k) return str;
+        if (KO[k] != null) return KO[k];
+        for (const [re, f] of KO_RE) { const m = k.match(re); if (m) return f(m); }
+        return str;
+    }
 
     /* Runtime state */
 
@@ -727,24 +828,116 @@
     const RE_KANA = /[\u3040-\u30ff]/, RE_JP = /[\u3040-\u30ff\u3400-\u9fff々〆ヶ]/, RE_LATIN = /[A-Za-z]/, RE_HANGUL = /[\uac00-\ud7a3]/;
 
     // Adds .pron to each line that needs one. Returns true if anything changed.
+    // Furigana for one line: [{s, e, rt}] character ranges in the line's text. Kana the word
+    // shares with its reading at either end (okurigana) is left out of the ruby.
+    const RE_KANJI = /[\u3400-\u9fff々〆ヶ]/;
+    const toHira = s => s.replace(/[\u30a1-\u30f6]/g, c => String.fromCharCode(c.charCodeAt(0) - 0x60));
+    function lineFuri(tokens) {
+        const out = [];
+        let pos = 0;
+        for (const t of tokens) {
+            const surf = t.surface_form, start = pos;
+            pos += surf.length;
+            if (!RE_KANJI.test(surf) || !t.reading || t.reading === '*') continue;
+            // Kanji and kana mixed (見つけ出す): match the reading against the kana to give each
+            // run of kanji just its own part.
+            const parts = toHira(surf).split(/([\u3400-\u9fff々〆ヶ]+)/).filter(Boolean);
+            if (parts.length > 1) {
+                const re = new RegExp('^' + parts.map(x => RE_KANJI.test(x) ? '(.+?)' : x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('') + '$');
+                const m = toHira(t.reading).match(re);
+                if (m) {
+                    let at = start, g = 1;
+                    for (const x of parts) {
+                        if (RE_KANJI.test(x)) { const rt = m[g++]; if (rt) out.push({ s: at, e: at + x.length, rt }); }
+                        at += x.length;
+                    }
+                    continue;
+                }
+            }
+            let a = 0, b = surf.length;
+            let rd = toHira(t.reading);
+            const sh = toHira(surf);
+            while (a < b - 1 && !RE_KANJI.test(surf[a]) && sh[a] === rd[0]) { a++; rd = rd.slice(1); }
+            while (b > a + 1 && !RE_KANJI.test(surf[b - 1]) && sh[b - 1] === rd[rd.length - 1]) { b--; rd = rd.slice(0, -1); }
+            if (rd && rd !== sh.slice(a, b)) out.push({ s: start + a, e: start + b, rt: rd });
+        }
+        return out.length ? out : null;
+    }
+
     async function addPron(result) {
-        const key = `${pronJa}${pronEn}`;
+        const key = `${pronJa}${pronEn}${furiOn}`;
         if (!result?.lines?.length || result.pronKey === key) return false;
         const lines = result.lines;
         // Kanji without any kana is Chinese, not Japanese.
-        const ja = pronJa && lines.some(l => RE_KANA.test(l.text));
+        const ja = (pronJa || furiOn) && lines.some(l => RE_KANA.test(l.text));
         const en = pronEn && lines.some(l => RE_LATIN.test(l.text));
         const [tk, dict] = await Promise.all([ja ? loadKuromoji() : null, en ? loadCmu() : null]);
         for (const l of lines) {
             l.pron = null;
+            l.furi = null;
             if (l.dots || RE_HANGUL.test(l.text)) continue;
             let p = null;
-            if (tk && RE_JP.test(l.text)) p = linePron(tk.tokenize(l.text), dict);
+            if (tk && RE_JP.test(l.text)) {
+                const toks = tk.tokenize(l.text);
+                if (furiOn) l.furi = lineFuri(toks);
+                if (pronJa) p = linePron(toks, dict);
+            }
             else if (dict && RE_LATIN.test(l.text)) p = enText(l.text, dict).replace(/\s+/g, ' ').trim();
             if (p && p !== l.text && !(p === l.text.replace(/[,.!?]/g, ''))) l.pron = p;
         }
         result.pronKey = key;
         return true;
+    }
+
+    /* AI translation (Gemini). One request per song: every line goes in, a JSON array of
+       Korean lines comes back, and it's kept with the lyrics (memory and disk). */
+
+    const GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
+    let geminiModel = null;   // the first model that worked for this key
+    async function geminiTranslate(texts) {
+        const prompt = 'Translate these song lyrics into natural, singable Korean. Keep the meaning and tone; ' +
+            'do not add explanations. Return a JSON array with exactly one Korean string per input line, in order. ' +
+            'Lines already in Korean stay as they are.\n\n' + JSON.stringify(texts);
+        const body = JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
+        });
+        let lastErr = null;
+        for (const m of geminiModel ? [geminiModel] : GEMINI_MODELS) {
+            const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, {
+                method: 'POST', body, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': gemKey },
+            });
+            if (res.status === 404) { lastErr = new Error(`model ${m} unavailable`); continue; }
+            const j = await res.json().catch(() => null);
+            if (!res.ok) throw new Error(j?.error?.message || `HTTP ${res.status}`);
+            const txt = j?.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
+            const arr = JSON.parse(txt.slice(txt.indexOf('['), txt.lastIndexOf(']') + 1));
+            if (!Array.isArray(arr)) throw new Error('unexpected reply');
+            geminiModel = m;
+            return arr.map(x => String(x ?? ''));
+        }
+        throw lastErr || new Error('no model');
+    }
+
+    // Adds .trans to each line. Returns true if anything changed.
+    const transInflight = new WeakMap();
+    async function addTrans(result) {
+        if (!transOn || !gemKey || !result?.lines?.length) return false;
+        if (result.trans === 'ko') return false;
+        const lines = result.lines.filter(l => !l.dots && l.text);
+        // Mostly Korean already: nothing to do.
+        if (lines.filter(l => RE_HANGUL.test(l.text)).length > lines.length / 2) { result.trans = 'ko'; return false; }
+        if (transInflight.has(result)) return transInflight.get(result);
+        const job = (async () => {
+            const uniq = [...new Set(lines.map(l => l.text))];
+            const out = await geminiTranslate(uniq);
+            const map = new Map(uniq.map((t, i) => [t, out[i] || '']));
+            for (const l of lines) { const k = map.get(l.text); l.trans = k && k !== l.text ? k : null; }
+            result.trans = 'ko';
+            return true;
+        })().finally(() => transInflight.delete(result));
+        transInflight.set(result, job);
+        return job;
     }
 
     /* Fetch with fallback */
@@ -1217,10 +1410,20 @@
     @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
     @media (prefers-reduced-motion:reduce){.dots .dt,.lyric.dots.active{animation:none}}
 
+    /* Furigana: small kana over kanji. Inside word-filled spans the text itself is transparent,
+       so the readings get their own colour. */
+    .lyric ruby{ruby-position:over;}
+    .lyric rt,#mLine rt{font-size:.42em;font-weight:600;letter-spacing:0;-webkit-text-fill-color:currentColor;opacity:.9;}
+    .lyric.kara.active .w rt{color:rgba(255,255,255,.9);}
+    #mLine.kara .w rt{color:rgba(255,255,255,.9);}
+
     /* Korean reading under the line. */
     .pron{font-size:calc(var(--pz,.6) * 1em);font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
         -webkit-text-fill-color:currentColor;}
     .lyric:not(.active) .pron{opacity:.85;}
+    .trans{font-size:calc(var(--tz,.62) * 1em);font-weight:500;letter-spacing:0;line-height:1.35;margin-top:4px;white-space:normal;
+        -webkit-text-fill-color:currentColor;opacity:.82;}
+    #mLine .trans{font-size:calc(var(--tz,.62) * 1.1em);}
     #mLine .pron{font-size:calc(var(--pz,.6) * 1.1em);margin-top:4px;}
     .lyric.kara.active .w{
         background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.36) var(--p,0%) 100%);
@@ -1286,6 +1489,8 @@
     .num{font-size:12px;font-weight:700;color:rgba(255,255,255,.45);width:12px;}
     .pup{width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.12);font-size:10px;flex:none;}
     .pup:disabled{opacity:.25;cursor:default;}
+    .ssel{background:rgba(0,0,0,.3);border:0;outline:none;color:#fff;border-radius:7px;padding:5px 8px;font:inherit;font-size:12.5px;}
+    .ssel option{background:#2a2a2e;color:#fff;}
     .stok{background:rgba(0,0,0,.3);border:0;outline:none;color:#fff;border-radius:7px;padding:6px 9px;
         font-size:12px;width:140px;font-family:ui-monospace,Consolas,monospace;}
 
@@ -1451,7 +1656,7 @@
     body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur{display:none;}
     body.v-mobile #mbg{z-index:0;}
     body.v-mobile.canvas:not(.pl):not(.ps) #mbg{background:var(--cvbg,var(--mtop,#121212));transition:background-color 1.2s ease;}
-    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
+    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(var(--pw,100vw) * 16 / 9);bottom:auto;height:var(--vh);}
     body.v-mobile.canvas #xVid{height:var(--vh);
         -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);
         mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);}
@@ -1460,7 +1665,7 @@
         transparent 38%,rgba(0,0,0,.35) 70%,rgba(0,0,0,0) 100%);}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
-        height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
+        height:clamp(60px,calc(var(--pw,100vw) * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
@@ -1550,6 +1755,13 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
 
+    /* Window mode: Spotify's window may be wide, so the page keeps a phone-like column. */
+    body.dock{--pw:min(100vw,560px);}
+    body.dock #main,body.dock #mmore{max-width:560px;margin-left:auto;margin-right:auto;}
+    body.dock.canvas:not(.pl):not(.ps) #xbg{left:calc(50% - var(--pw) / 2);right:auto;width:var(--pw);}
+    body.dock.pq #panel{left:calc(50% - min(calc(100vw - 20px),540px) / 2);right:auto;width:min(calc(100vw - 20px),540px);}
+    body.dock #mmini>*{max-width:560px;}
+
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
     body.v-mobile.ps #top,body.v-mobile.ps #bottom{display:none;}
@@ -1638,7 +1850,7 @@
 
   <div id="panel" class="nd">
     <div class="pv" id="pvLyrics">
-      <div id="mlh"><span>Lyrics</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
+      <div id="mlh"><span>Lyrics preview</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
       <div id="lyrWrap"><div id="lyrScroll" class="${centerLyrics ? 'centered' : ''}" style="--lsz:${fontSize}px"></div></div>
       <div id="lyrOff" title="Lyrics timing">
         <button id="offMinus" title="Lyrics earlier" aria-label="Lyrics earlier">−</button>
@@ -1686,6 +1898,7 @@
           <div class="sr"><span class="slbl">Center lyrics</span><div class="tog ${centerLyrics?'on':''}" id="togCenter"></div></div>
           <div class="sr"><span class="slbl">Pronunciation · Japanese</span><div class="tog ${pronJa?'on':''}" id="togPronJa"></div></div>
           <div class="sr"><span class="slbl">Pronunciation · English</span><div class="tog ${pronEn?'on':''}" id="togPronEn"></div></div>
+          <div class="sr"><span class="slbl">Furigana</span><div class="tog ${furiOn?'on':''}" id="togFuri"></div></div>
           <div class="sr"><span class="slbl">Lyrics font</span><button class="sbtn" id="sFont">Change…</button></div>
           <div class="sr"><span class="slbl">Lyrics size</span>
             <div class="fsrow"><input type="range" class="fsslider" id="fsSlider" min="14" max="40" value="${fontSize}"><span class="fsval" id="fsVal">${fontSize}px</span></div></div>
@@ -1699,6 +1912,14 @@
         </div>
         <div class="shint pipOnly">Controls fade after a few seconds without the mouse moving, and come back when it does.</div>
 
+        <div class="stitle">Translation</div>
+        <div class="scard">
+          <div class="sr"><span class="slbl">Translate lyrics</span><div class="tog ${transOn?'on':''}" id="togTrans"></div></div>
+          <div class="sr"><span class="slbl">Gemini API key</span>
+            <input class="stok" id="gemKey" type="password" placeholder="AIza…" value="${gemKey.replace(/[^\w.-]/g,'')}" spellcheck="false"></div>
+        </div>
+        <div class="shint">Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.</div>
+
         <div class="stitle">Lyric sources</div>
         <div class="scard">
           <div class="sr"><span class="slbl">Word-by-word sync</span><div class="tog ${karaoke?'on':''}" id="togKara"></div></div>
@@ -1708,6 +1929,23 @@
         </div>
         <div class="shint">Sources are tried top to bottom until one has synced lyrics.
           NetEase and Musixmatch are the ones that carry word timings.</div>
+
+        <div class="stitle">Language</div>
+        <div class="scard">
+          <div class="sr"><span class="slbl">Language</span>
+            <select class="ssel" id="langSel" data-raw>
+              <option value="auto"${langPref() === 'auto' ? ' selected' : ''}>Auto · 자동</option>
+              <option value="ko"${langPref() === 'ko' ? ' selected' : ''}>한국어</option>
+              <option value="en"${langPref() === 'en' ? ' selected' : ''}>English</option>
+            </select></div>
+        </div>
+        <div class="shint">Applies the next time the player opens.</div>
+
+        <div class="stitle">Updates</div>
+        <div class="scard">
+          <div class="sr"><span class="slbl">Check for updates</span>
+            <span class="fsval" style="margin-left:auto">v${MOBILE_VERSION}</span><button class="sbtn" id="updBtn">Check</button></div>
+        </div>
 
         <div class="stitle pipOnly">Window</div>
         <div class="scard pipOnly">
@@ -1780,6 +2018,8 @@
     async function openPip() {
         // Clicking the launcher again closes it.
         if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; return; }
+        // Window mode and the mini player don't run together.
+        if (dockFrame) closeDock(true);
         if (!('documentPictureInPicture' in window)) {
             Spicetify.showNotification('WavePlayer: this Spotify version has no picture-in-picture support. Update Spotify.', true);
             return;
@@ -1823,10 +2063,14 @@
     };
 
     // full: the full-screen view, drawn in a frame over Spotify's window instead of a PiP window.
-    function setupPip(win, full = false) {
+    // dock: the phone view in a frame over Spotify's window (window mode): it can be as tall as
+    // the screen, unlike a PiP window, and Spotify's own window moves and sizes it.
+    function setupPip(win, full = false, dock = false) {
+        const framed = full || dock;
+        lang = pickLang();
         const doc = win.document;
         // A frame's own visibility can stay hidden; full screen follows Spotify's window.
-        const visDoc = full ? document : doc;
+        const visDoc = framed ? document : doc;
         const hidden = () => visDoc.hidden;
         const sp  = Spicetify.Player;
         const P   = Spicetify.Platform;
@@ -1837,6 +2081,46 @@
         const el = {};
         for (const node of doc.querySelectorAll('[id]')) el[node.id] = node;
         const body = doc.body;
+
+        // Korean interface: translate labels as they appear. Song, artist and playlist names,
+        // lyrics and numbers are left alone.
+        const RAW = '.lyric,#lyrScroll,#mLine,.ttl,.sub,.mmt,.mms,.qn,.qa,.cn,.aname,.abio,[data-raw],#offVal,.tm,#vPct,.fsval,.stok,#qFrom b,.prow .slbl';
+        const ATTRS = ['title', 'aria-label', 'placeholder'];
+        function i18n(node) {
+            if (lang !== 'ko' || !node) return;
+            if (node.nodeType === 3) {
+                if (node.parentElement?.closest(RAW)) return;
+                const v = tr(node.nodeValue);
+                if (v !== node.nodeValue) node.nodeValue = v;
+                return;
+            }
+            if (node.nodeType !== 1) return;
+            for (const e of [node, ...node.querySelectorAll('*')]) {
+                for (const a of ATTRS) {
+                    const old = e.getAttribute(a);
+                    if (old) { const v = tr(old); if (v !== old) e.setAttribute(a, v); }
+                }
+                if (e.closest(RAW)) continue;
+                for (const c of e.childNodes) if (c.nodeType === 3 && c.nodeValue.trim()) {
+                    const v = tr(c.nodeValue);
+                    if (v !== c.nodeValue) c.nodeValue = v;
+                }
+            }
+        }
+        if (lang === 'ko') {
+            doc.documentElement.lang = 'ko';
+            i18n(body);
+            new win.MutationObserver(muts => {
+                for (const m of muts) {
+                    if (m.type === 'childList') m.addedNodes.forEach(i18n);
+                    else if (m.type === 'characterData') i18n(m.target);
+                    else {
+                        const old = m.target.getAttribute(m.attributeName), v = tr(old);
+                        if (old && v !== old) m.target.setAttribute(m.attributeName, v);
+                    }
+                }
+            }).observe(body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
+        }
 
         // Spotify injects its own mini player stylesheets into every PiP window; remove them.
         const dropForeignCss = () => { for (const l of doc.querySelectorAll('link[rel="stylesheet"]')) l.remove(); };
@@ -1911,7 +2195,7 @@
                 h: Math.max(SZ_MIN.mobile.h, Math.floor(win.screen.availHeight * PIP_MAX) - Math.max(0, win.outerHeight - win.innerHeight)) }
             : SZ[v];
         function resize(sz) {
-            if (full) return;
+            if (framed) return;
             want = sz;
             sizingUntil = win.performance.now() + 2500;
             win.clearTimeout(sizeTimer);
@@ -1941,7 +2225,8 @@
             if (full && lyricsOnly && !panel) panel = 'lyrics';
             body.classList.toggle('lo', full && lyricsOnly);
             // The mobile view keeps its window size; panels open inside it.
-            const v = full ? 'full' : mode === 'mobile' ? 'mobile' : panel ? 'panel' : mode;
+            const v = full ? 'full' : (dock || mode === 'mobile') ? 'mobile' : panel ? 'panel' : mode;
+            body.classList.toggle('dock', dock);
             body.classList.remove('v-compact', 'v-expanded', 'v-panel', 'v-mobile');
             body.classList.add(`v-${v}`);
             body.classList.toggle('p', !!panel);
@@ -1979,7 +2264,7 @@
             const home = !panel || panel === 'queue';
             el.mTitle.textContent = panel === 'settings' ? 'Settings' : panel === 'lyrics' ? 'Lyrics' : ctxName || 'Now Playing';
             el.mTitle.style.textTransform = home && ctxName ? 'none' : '';
-            el.qFrom.innerHTML = ctxName ? `Playing from <b>${esc(ctxName)}</b>` : '';
+            el.qFrom.innerHTML = !ctxName ? '' : lang === 'ko' ? `<b>${esc(ctxName)}</b> 재생 중에서` : `Playing from <b>${esc(ctxName)}</b>`;
         }
 
         const setMode = m => {
@@ -1992,7 +2277,7 @@
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
             (view === 'mobile' && (!panel || panel === 'queue' || (panel === 'lyrics' && lf.bg === 'canvas')));
-        const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
+        const closePlayer = () => { if (full) closeFull(); else if (dock) closeDock(true); else try { win.close(); } catch {} };
 
         /* Titles */
 
@@ -2482,11 +2767,21 @@ void main() {
         // Readings can take a moment the first time (dictionaries download), so the lyrics
         // show first and are redrawn once they're ready.
         async function refreshPron(token = lyricReq) {
-            const res = currentLyrics;
-            if (!(await addPron(res)) || token !== lyricReq || res !== currentLyrics) return;
-            renderLyrics();
-            lyr.idx = -1;
-            updateLyrics(lyrPos());
+            const res = currentLyrics, set = curSet, uri = currentTrackUri;
+            const redraw = () => {
+                if (token !== lyricReq || res !== currentLyrics) return;
+                renderLyrics();
+                lyr.idx = -1;
+                updateLyrics(lyrPos());
+            };
+            if (await addPron(res)) redraw();
+            let changed = false;
+            try { changed = await addTrans(res); }
+            catch (e) { if (token === lyricReq) toast(lang === 'ko' ? `번역 실패: ${e.message}` : `Translation failed: ${e.message}`); }
+            if (changed) {
+                redraw();
+                if (set && uri) idbPut(uri, set.results);
+            }
         }
 
         /* Player state (driven by PlayerAPI events, no polling) */
@@ -2719,7 +3014,7 @@ void main() {
         function renderMenu(items, anchor) {
             menuItems = items;
             el.menu.innerHTML = items.map((m, i) => m === '-' ? '<div class="msep"></div>'
-                : `<button class="mi" role="menuitem" data-i="${i}"${m.off ? ' disabled' : ''}>${esc(m.t)}${m.sub ? '<span class="chev">›</span>' : ''}</button>`).join('');
+                : `<button class="mi" role="menuitem" data-i="${i}"${m.off ? ' disabled' : ''}${m.raw ? ' data-raw' : ''}>${esc(m.t)}${m.sub ? '<span class="chev">›</span>' : ''}</button>`).join('');
             el.menu.scrollTop = 0;
             openPop(el.menu, anchor);
         }
@@ -2784,6 +3079,7 @@ void main() {
                 '-',
                 { t: 'Lyrics source', sub: true, f: () => openSources(), off: !curSet },
                 { t: 'Lyrics font…', f: () => win.setTimeout(() => openFont(dotsEl()), 0) },
+                ...(full ? [] : [{ t: dock ? 'Open as mini player' : 'Open in Spotify window', f: () => dock ? (closeDock(true), openPip()) : openDock() }]),
                 '-',
                 { t: 'Settings', f: () => { panel = 'settings'; layout(); } },
             ], dotsEl());
@@ -2832,7 +3128,7 @@ void main() {
             renderMenu([
                 { t: '‹ Back', sub: true, f: openMenu },
                 '-',
-                ...(lists.length ? lists.map(l => ({ t: l.name, f: async () => {
+                ...(lists.length ? lists.map(l => ({ t: l.name, raw: true, f: async () => {
                     try {
                         await P.PlaylistAPI.add(l.uri, [uri], { after: 'end' });
                         toast(`Added to ${l.name}`);
@@ -2896,6 +3192,19 @@ void main() {
         const lyr = { idx: -1, word: -1, active: null, els: [] };
         let raf = null;
 
+        // Text with <ruby> readings for the furigana ranges that start inside it.
+        function rubyText(text, off, furi) {
+            if (!furiOn || !furi) return esc(text);
+            let out = '', i = 0;
+            for (const f of furi) {
+                const a = f.s - off, b = Math.min(f.e - off, text.length);
+                if (a < i || a >= text.length || b <= a) continue;
+                out += esc(text.slice(i, a)) + `<ruby>${esc(text.slice(a, b))}<rt>${esc(f.rt)}</rt></ruby>`;
+                i = b;
+            }
+            return out + esc(text.slice(i));
+        }
+
         function renderLyrics() {
             lyr.active = null;
             lyr.els = [];
@@ -2908,9 +3217,18 @@ void main() {
             el.lyrScroll.innerHTML = currentLyrics.lines.map(l => {
                 if (l.dots) return `<div class="lyric dots" data-t="${l.t}"><span class="dt"></span><span class="dt"></span><span class="dt"></span></div>`;
                 const words = kara && l.words;
-                const inner = words ? l.words.map(w => `<span class="w">${esc(w.text)}</span>`).join('') : esc(l.text);
+                // Word spans are placed in the line's text so furigana can sit inside them.
+                let cur = 0;
+                const inner = words ? l.words.map(w => {
+                    const core = w.text.trim(), lead = w.text.length - w.text.trimStart().length;
+                    let at = core ? l.text.indexOf(core, cur) : cur;
+                    if (at < 0) at = cur;
+                    cur = at + core.length;
+                    return `<span class="w">${rubyText(w.text, at - lead, l.furi)}</span>`;
+                }).join('') : rubyText(l.text, 0, l.furi);
                 const pron = l.pron ? `<div class="pron">${esc(l.pron)}</div>` : '';
-                return `<div class="lyric${words ? ' kara' : ''}" data-t="${l.t}">${inner}${pron}</div>`;
+                const trans = transOn && l.trans ? `<div class="trans">${esc(l.trans)}</div>` : '';
+                return `<div class="lyric${words ? ' kara' : ''}" data-t="${l.t}">${inner}${pron}${trans}</div>`;
             }).join('');
             lyr.els = [...el.lyrScroll.children];
         }
@@ -3048,6 +3366,7 @@ void main() {
             lf.w ? root.setProperty('--lw', lf.w) : root.removeProperty('--lw');
             lf.lh ? root.setProperty('--llh', lf.lh) : root.removeProperty('--llh');
             lf.pz ? root.setProperty('--pz', lf.pz) : root.removeProperty('--pz');
+            lf.tz ? root.setProperty('--tz', lf.tz) : root.removeProperty('--tz');
             // One stylesheet with the chosen web font (a <style>, which the PiP cleanup leaves alone).
             let st = doc.getElementById('lyrFontCss');
             if (!st) { st = doc.createElement('style'); st.id = 'lyrFontCss'; doc.head.appendChild(st); }
@@ -3088,7 +3407,9 @@ void main() {
                 <div class="fl">Line spacing</div>
                 <div class="sl"><input type="range" data-k="lh" min="1.05" max="1.8" step="0.05" value="${lh}"><span>${(+lh).toFixed(2)}</span></div>
                 <div class="fl">Pronunciation size</div>
-                <div class="sl"><input type="range" data-k="pz" min="0.4" max="0.9" step="0.05" value="${pz}"><span>${Math.round(pz * 100)}%</span></div>`;
+                <div class="sl"><input type="range" data-k="pz" min="0.4" max="0.9" step="0.05" value="${pz}"><span>${Math.round(pz * 100)}%</span></div>
+                <div class="fl">Translation size</div>
+                <div class="sl"><input type="range" data-k="tz" min="0.4" max="0.9" step="0.05" value="${lf.tz || .62}"><span>${Math.round((lf.tz || .62) * 100)}%</span></div>`;
         }
         function fontChanged() {
             saveLf();
@@ -3115,6 +3436,7 @@ void main() {
             if (k === 'size') { setSize(v); i.nextElementSibling.textContent = `${v}px`; }
             if (k === 'lh') { lf.lh = v; i.nextElementSibling.textContent = v.toFixed(2); }
             if (k === 'pz') { lf.pz = v; i.nextElementSibling.textContent = `${Math.round(v * 100)}%`; }
+            if (k === 'tz') { lf.tz = v; i.nextElementSibling.textContent = `${Math.round(v * 100)}%`; }
             fontChanged();
         });
         function setSize(v) {
@@ -3256,6 +3578,37 @@ void main() {
             loadCanvas(canvasOn && withCanvas() ? currentTrackUri : null);
         };
 
+        // Compares with the file on GitHub; when newer, copies the one-line update command.
+        const newer = (a, b) => {
+            const x = a.split('.').map(Number), y = b.split('.').map(Number);
+            for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0);
+            return false;
+        };
+        async function checkUpdate(manual) {
+            if (REPO.includes('__')) { if (manual) toast(lang === 'ko' ? '업데이트 저장소가 아직 설정되지 않았습니다' : 'No update source set yet'); return; }
+            try {
+                localStorage.setItem('wp7-upd-at', Date.now());
+                const txt = await (await fetch(`https://raw.githubusercontent.com/${REPO}/main/waveplayer-mobile.js`, { cache: 'no-store' })).text();
+                const v = txt.match(/MOBILE_VERSION = '([\d.]+)'/)?.[1];
+                if (v && newer(v, MOBILE_VERSION)) {
+                    const mac = /mac/i.test(navigator.platform || navigator.userAgent);
+                    const cmd = mac
+                        ? `curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh`
+                        : `iwr -useb https://raw.githubusercontent.com/${REPO}/main/install.ps1 | iex`;
+                    try { P.ClipboardAPI.copy(cmd); } catch {}
+                    toast(lang === 'ko' ? `새 버전 ${v} · 업데이트 명령을 복사했습니다` : `Update ${v} available · command copied`);
+                    try { Spicetify.showNotification(`Wave Player Mobile ${v}: ${lang === 'ko' ? '터미널에 붙여넣어 업데이트하세요' : 'paste the copied command in a terminal to update'}`); } catch {}
+                } else if (manual) toast(`Up to date (v${MOBILE_VERSION})`);
+            } catch { if (manual) toast(lang === 'ko' ? '업데이트를 확인하지 못했습니다' : 'Couldn’t check for updates'); }
+        }
+        el.updBtn.onclick = () => checkUpdate(true);
+        // Once a day, quietly.
+        if (!full && Date.now() - (+localStorage.getItem('wp7-upd-at') || 0) > 864e5) win.setTimeout(() => checkUpdate(false), 4000);
+
+        el.langSel.onchange = e => {
+            try { localStorage.setItem('wp7-lang', e.target.value); } catch {}
+            toast(e.target.value === 'en' ? 'Applies the next time the player opens.' : '플레이어를 다시 열면 적용됩니다.');
+        };
         el.togCenter.onclick = () => {
             centerLyrics = !centerLyrics;
             el.togCenter.classList.toggle('on', centerLyrics);
@@ -3277,6 +3630,27 @@ void main() {
             refreshPron();
         };
         el.togPronJa.onclick = togPron('ja', el.togPronJa);
+        el.togFuri.onclick = () => {
+            furiOn = !furiOn;
+            el.togFuri.classList.toggle('on', furiOn);
+            localStorage.setItem('wp7-furi', furiOn);
+            renderLyrics(); lyr.idx = -1; updateLyrics(lyrPos());
+            refreshPron();
+        };
+        el.togTrans.onclick = () => {
+            transOn = !transOn;
+            el.togTrans.classList.toggle('on', transOn);
+            localStorage.setItem('wp7-trans', transOn);
+            if (transOn && !gemKey) toast(lang === 'ko' ? 'Gemini API 키를 넣어주세요' : 'Add a Gemini API key');
+            renderLyrics(); lyr.idx = -1; updateLyrics(lyrPos());
+            refreshPron();
+        };
+        el.gemKey.onchange = e => {
+            gemKey = e.target.value.trim();
+            geminiModel = null;
+            localStorage.setItem('wp7-gemini', gemKey);
+            refreshPron();
+        };
         el.togPronEn.onclick = togPron('en', el.togPronEn);
         el.togKara.onclick = () => {
             karaoke = !karaoke;
@@ -3355,7 +3729,7 @@ void main() {
         el.mini.onclick = () => setMode('compact');
         // Mobile view
         el.wMob.onclick   = () => setMode('mobile');
-        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('compact'); };
+        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else if (dock) closeDock(true); else setMode('compact'); };
         el.mDots.onclick  = openMenu;
         el.mClose.onclick = closePlayer;
         el.mlh.onclick    = () => togglePanel('lyrics');
@@ -3374,7 +3748,7 @@ void main() {
                 case 'ArrowUp':   e.preventDefault(); commitVol(Math.min(100, Math.round((sp.getVolume() || 0) * 100) + 5)); break;
                 case 'ArrowDown': e.preventDefault(); commitVol(Math.max(0, Math.round((sp.getVolume() || 0) * 100) - 5)); break;
                 case 'l': case 'L': togglePanel('lyrics'); break;
-                case 'm': case 'M': if (!full) setMode(mode === 'mobile' ? 'compact' : 'mobile'); break;
+                case 'm': case 'M': if (!framed) setMode(mode === 'mobile' ? 'compact' : 'mobile'); break;
                 case 'q': case 'Q': if (!full) togglePanel('queue'); break;
                 case '[': if (lyrOn()) nudge(-250); break;
                 case ']': if (lyrOn()) nudge(250); break;
@@ -3397,7 +3771,7 @@ void main() {
                 // well clear of our own resizes. A lone one is Chrome snapping the window back to an
                 // old size (about 4s after opening), so undo it.
                 const now = win.performance.now();
-                if (view && !full && now > sizingUntil && now - openedAt > 2500) {
+                if (view && !framed && now > sizingUntil && now - openedAt > 2500) {
                     burst++;
                     win.clearTimeout(saveTimer);
                     saveTimer = win.setTimeout(() => {
@@ -3469,7 +3843,7 @@ void main() {
             el.xVid.pause();
             el.xVid.removeAttribute('src');
             if (canvasUrl) win.URL.revokeObjectURL(canvasUrl);
-            if (full) return;
+            if (framed) return;
             try { localStorage.setItem('wp7-pos', JSON.stringify({ x: win.screenX, y: win.screenY })); } catch {}
             if (pipWindow === win) pipWindow = null;
         };
@@ -3502,6 +3876,29 @@ void main() {
 
     /* Full screen: a frame over Spotify's window. The PiP window closes meanwhile and
        comes back when full screen is closed with ✕ (Esc gives no user gesture to reopen it). */
+
+    let dockFrame = null, dockCleanup = null;
+    function openDock() {
+        if (dockFrame) return;
+        if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; }
+        currentTrackUri = null;
+        dockFrame = document.createElement('iframe');
+        dockFrame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483646;background:#121212';
+        document.body.appendChild(dockFrame);
+        dockCleanup = setupPip(dockFrame.contentWindow, false, true);
+        dockFrame.contentWindow.focus();
+        // Remembered, so Spotify opens in window mode next time too.
+        try { localStorage.setItem('wp7-dock', 'true'); } catch {}
+    }
+    // byUser: closed on purpose (✕, back), so don't reopen it at the next start.
+    function closeDock(byUser) {
+        if (!dockFrame) return;
+        const frame = dockFrame;
+        dockFrame = null;
+        dockCleanup?.();
+        frame.remove();
+        if (byUser) try { localStorage.removeItem('wp7-dock'); } catch {}
+    }
 
     let fullFrame = null, fullCleanup = null, reopenPip = false;
     function openFull() {
@@ -3752,6 +4149,9 @@ void main() {
         }, 1000);
     } catch {}
     try { Spicetify.Keyboard?.registerShortcut?.({ key: 'm', ctrl: true, shift: true }, openPip); } catch {}
+    // Window mode: Ctrl+Shift+D, and back where it was if Spotify closed with it open.
+    try { Spicetify.Keyboard?.registerShortcut?.({ key: 'd', ctrl: true, shift: true }, () => dockFrame ? closeDock(true) : openDock()); } catch {}
+    try { if (localStorage.getItem('wp7-dock') === 'true') setTimeout(openDock, 1500); } catch {}
 
     // Last, and wrapped, so it can never break the player.
     try { checkVersion(); } catch {}
