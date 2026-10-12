@@ -1726,18 +1726,22 @@
     body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur{display:none;}
     body.v-mobile #mbg{z-index:0;}
     body.v-mobile.canvas:not(.pl):not(.ps) #mbg{background:var(--cvbg,var(--mtop,#121212));transition:background-color 1.2s ease;}
-    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
+    /* The fade follows the lyric line, not the video's length: a wider window makes the video
+       taller, and the line would otherwise sit on its bright, unfaded part.
+       --fy = where the lyric line ends (header 52px + the line's box, as sized below). */
+    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);
+        --fy:calc(52px + clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px)));}
     body.v-mobile.canvas #xVid{height:var(--vh);
-        -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);
-        mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);}
+        -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));
+        mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));}
     /* Darkened under the header, and gently behind the titles and controls. */
     body.v-mobile.canvas #xShade{display:block;background:linear-gradient(180deg,rgba(0,0,0,.55) 0,transparent 110px,
-        transparent 38%,rgba(0,0,0,.35) 70%,rgba(0,0,0,0) 100%);}
+        transparent calc(var(--fy,60%) - 300px),rgba(0,0,0,.5) calc(var(--fy,75%) - 40px),rgba(0,0,0,.25) calc(var(--fy,75%) + 160px),rgba(0,0,0,0) calc(var(--fy,75%) + 260px));}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
         height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);letter-spacing:-.01em;color:#fff;
-        text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
+        text-shadow:0 1px 3px rgba(0,0,0,.35),0 2px 16px rgba(0,0,0,.55);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
     #mLine.kara .w{background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.5) var(--p,0%) 100%);
         -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
