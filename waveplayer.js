@@ -141,6 +141,20 @@
     let   pronJa   = localStorage.getItem('wp7-pron-ja') !== 'false';
     let   pronEn   = localStorage.getItem('wp7-pron-en') !== 'false';
 
+    // Lyrics font (the Aa button). Web fonts come from Google Fonts; each pairs a Korean and a
+    // Japanese face so both scripts match.
+    const FONTS = {
+        system: { name: 'System' },
+        noto:   { name: 'Noto Sans',   q: 'Noto+Sans+KR:wght@400;500;700;800;900&family=Noto+Sans+JP:wght@400;500;700;800;900', stack: "'Noto Sans KR','Noto Sans JP'" },
+        serif:  { name: 'Noto Serif',  q: 'Noto+Serif+KR:wght@400;500;700;900&family=Noto+Serif+JP:wght@400;500;700;900', stack: "'Noto Serif KR','Noto Serif JP'" },
+        plex:   { name: 'IBM Plex',    q: 'IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Sans+JP:wght@400;500;600;700', stack: "'IBM Plex Sans KR','IBM Plex Sans JP'" },
+        round:  { name: 'Rounded',     q: 'M+PLUS+Rounded+1c:wght@400;500;700;800;900&family=Gowun+Dodum', stack: "'M PLUS Rounded 1c','Gowun Dodum'" },
+        hand:   { name: 'Handwriting', q: 'Gaegu:wght@400;700&family=Yomogi', stack: "'Gaegu','Yomogi'" },
+    };
+    const lf = (() => { try { return JSON.parse(localStorage.getItem('wp7-lfont') || '{}'); } catch { return {}; } })();
+    if (!FONTS[lf.font]) lf.font = 'system';
+    const saveLf = () => { try { localStorage.setItem('wp7-lfont', JSON.stringify(lf)); } catch {} };
+
     /* Runtime state */
 
     let pipWindow       = null;
@@ -494,6 +508,7 @@
         return null;
     }
 
+    const PROV_NAMES = { spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
     const SOURCES = {
         spotify: fromSpotify, lrclib: fromLrclib,
         netease: fromNetease, musixmatch: fromMusixmatch,
@@ -743,39 +758,133 @@
         }
     }
 
-    const lyricCache = new Map();
+    /* Lyric sets
+       Every enabled source is asked at once (each gets SOURCE_TIMEOUT); the best answer so far
+       is shown straight away and replaced if a better one arrives. Answers are kept per song,
+       in memory and on disk, so a song heard before shows its lyrics instantly. */
 
-    // Hits are kept; misses expire after a minute (often just a network blip).
-    const MISS_TTL = 60e3;
+    const SOURCE_TIMEOUT = 8000;
+    const HIT_TTL  = 30 * 864e5;    // keep found lyrics a month
+    const MISS_TTL = 3 * 864e5;     // retry "not found" after three days
+    const TIMED_OUT = Symbol('timeout');
+    const lyricSets = new Map();    // uri -> { results: {name: {r, at}}, pending: Set, done }
 
-    // First word-synced result wins (with word-by-word sync on); otherwise the first
-    // line-synced one; unsynced text is kept as a last fallback. Spotify's own lyrics
-    // are line-synced only, so later sources are tried for word timings.
-    async function fetchLyrics(track) {
-        const hit = lyricCache.get(track.uri);
-        if (hit && (hit.result || Date.now() - hit.at < MISS_TTL)) return hit.result;
-
-        let fallback = null, lineSynced = null;
-        for (const name of provOrder) {
-            if (provOff.has(name)) continue;
-            let r = null;
-            try { r = await SOURCES[name](track); } catch {}
-            if (!r?.lines?.length) continue;
-
-            fillGaps(r.lines);
-            r.karaoke = r.lines.some(l => l.words);
-            if (r.synced && (!karaoke || r.karaoke)) { remember(track.uri, r); return r; }
-            if (r.synced) lineSynced = lineSynced || r;
-            else fallback = fallback || r;
-        }
-        const best = lineSynced || fallback;
-        remember(track.uri, best);
-        return best;
+    // Songs the user pinned to one source ("Lyrics source" in the ⋯ menu).
+    const pins = (() => { try { return JSON.parse(localStorage.getItem('wp7-lyr-pin') || '{}'); } catch { return {}; } })();
+    function setPin(uri, name) {
+        delete pins[uri];
+        if (name) pins[uri] = name;
+        const keys = Object.keys(pins);
+        if (keys.length > 300) delete pins[keys[0]];
+        try { localStorage.setItem('wp7-lyr-pin', JSON.stringify(pins)); } catch {}
     }
 
-    function remember(uri, result) {
-        if (lyricCache.size > 40) lyricCache.clear();
-        lyricCache.set(uri, { result, at: Date.now() });
+    // On-disk cache (IndexedDB in Spotify's own storage). Failures just mean no cache.
+    let idbP = null;
+    function idb() {
+        if (idbP) return idbP;
+        idbP = new Promise(res => {
+            try {
+                const rq = indexedDB.open('wave-player-lyrics', 1);
+                rq.onupgradeneeded = () => rq.result.createObjectStore('sets');
+                rq.onsuccess = () => res(rq.result);
+                rq.onerror = () => res(null);
+            } catch { res(null); }
+        });
+        return idbP;
+    }
+    async function idbGet(uri) {
+        const db = await idb();
+        if (!db) return null;
+        return new Promise(res => {
+            try {
+                const rq = db.transaction('sets').objectStore('sets').get(uri);
+                rq.onsuccess = () => res(rq.result || null);
+                rq.onerror = () => res(null);
+            } catch { res(null); }
+        });
+    }
+    async function idbPut(uri, results) {
+        const db = await idb();
+        if (!db) return;
+        try { db.transaction('sets', 'readwrite').objectStore('sets').put({ results, at: Date.now() }, uri); } catch {}
+    }
+    // Now and then, drop entries nobody has played in a while.
+    setTimeout(async () => {
+        const db = await idb();
+        if (!db) return;
+        try {
+            const cur = db.transaction('sets', 'readwrite').objectStore('sets').openCursor();
+            cur.onsuccess = () => {
+                const c = cur.result;
+                if (!c) return;
+                if (Date.now() - (c.value?.at || 0) > HIT_TTL) c.delete();
+                c.continue();
+            };
+        } catch {}
+    }, 20000);
+
+    const fresh = e => e && Date.now() - e.at < (e.r ? HIT_TTL : MISS_TTL);
+    // Musixmatch needs a token; without one it isn't asked (and nothing is recorded).
+    const usable = name => !provOff.has(name) && (name !== 'musixmatch' || !!mxmToken);
+
+    // Starts (or resumes) the lookups for a track. onChange(set) runs whenever an answer lands.
+    function startLyrics(track, onChange) {
+        const uri = track.uri;
+        let set = lyricSets.get(uri);
+        if (!set) {
+            if (lyricSets.size > 60) lyricSets.delete(lyricSets.keys().next().value);
+            set = { results: {}, pending: new Set(), done: false, loaded: false };
+            lyricSets.set(uri, set);
+        }
+        set.onChange = onChange;
+        const run = () => {
+            const missing = provOrder.filter(n => usable(n) && !fresh(set.results[n]) && !set.pending.has(n));
+            set.done = !missing.length && !set.pending.size;
+            onChange(set);
+            for (const name of missing) {
+                set.pending.add(name);
+                const timer = new Promise(res => setTimeout(() => res(TIMED_OUT), SOURCE_TIMEOUT));
+                Promise.race([Promise.resolve().then(() => SOURCES[name](track)).catch(() => null), timer]).then(r => {
+                    set.pending.delete(name);
+                    if (r !== TIMED_OUT) {
+                        if (r?.lines?.length) { fillGaps(r.lines); r.karaoke = r.lines.some(l => l.words); r.source = name; }
+                        else r = null;
+                        set.results[name] = { r, at: Date.now() };
+                    }
+                    set.done = !set.pending.size;
+                    if (set.done) idbPut(uri, set.results);
+                    set.onChange?.(set);
+                });
+            }
+        };
+        if (set.loaded) { run(); return set; }
+        set.loaded = true;
+        idbGet(uri).then(saved => {
+            for (const [n, e] of Object.entries(saved?.results || {})) {
+                if (e?.r) e.r.source = n;
+                if (!set.results[n]) set.results[n] = e;
+            }
+            run();
+        });
+        return set;
+    }
+
+    // Best answer so far: the pinned source if it has one; else, in source order, the first with
+    // word timings (when word-by-word is on), then the first synced, then plain text.
+    // Re-run as answers land, so a slower but better source replaces the stand-in.
+    function pickLyrics(set, uri) {
+        const got = n => set.results[n]?.r || null;
+        const pin = pins[uri];
+        if (pin && got(pin)) return got(pin);
+        const order = provOrder.filter(usable);
+        const tiers = [
+            r => r.synced && (!karaoke || r.karaoke),
+            r => r.synced,
+            () => true,
+        ];
+        for (const ok of tiers) for (const n of order) { const r = got(n); if (r && ok(r)) return r; }
+        return null;
     }
 
     /* Utils */
@@ -1046,7 +1155,7 @@
     #lyrScroll{height:100%;overflow-y:auto;overflow-x:hidden;padding:30px 26px 40%;scrollbar-width:none;}
     #lyrScroll::-webkit-scrollbar{display:none;}
     #lyrScroll.centered .lyric{text-align:center;transform-origin:center center;}
-    .lyric{font-size:var(--lsz,24px);font-weight:800;letter-spacing:-.022em;line-height:1.24;
+    .lyric{font-size:var(--lsz,24px);font-family:var(--lfont,inherit);font-weight:var(--lw,800);letter-spacing:-.022em;line-height:var(--llh,1.24);
         color:rgba(255,255,255,.28);padding:10px 0;cursor:pointer;
         transform-origin:left center;transform:scale(.95);filter:blur(1.4px);
         transition:color .42s cubic-bezier(.4,0,.2,1),filter .42s cubic-bezier(.4,0,.2,1),
@@ -1057,10 +1166,10 @@
         text-shadow:0 0 30px rgba(255,255,255,.18);}
     .lyric.kara{white-space:pre-wrap;}
     /* Korean reading under the line. */
-    .pron{font-size:.6em;font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
+    .pron{font-size:calc(var(--pz,.6) * 1em);font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
         -webkit-text-fill-color:currentColor;}
     .lyric:not(.active) .pron{opacity:.85;}
-    #mLine .pron{font-size:.66em;margin-top:4px;}
+    #mLine .pron{font-size:calc(var(--pz,.6) * 1.1em);margin-top:4px;}
     .lyric.kara.active .w{
         background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.36) var(--p,0%) 100%);
         -webkit-background-clip:text;background-clip:text;
@@ -1151,6 +1260,31 @@
         box-shadow:0 1px 4px rgba(0,0,0,.4);}
     #vPct{font-size:11px;color:rgba(255,255,255,.55);width:26px;text-align:right;font-variant-numeric:tabular-nums;}
 
+    /* Lyrics font panel */
+    #fontPop{width:292px;padding:14px 14px 12px;overflow-y:auto;scrollbar-width:none;}
+    #fontPop .fh{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;}
+    #fontPop .ft{font-size:14px;font-weight:700;}
+    #fontPop .fr{font-size:12px;font-weight:600;padding:3px 9px;border-radius:7px;background:rgba(255,255,255,.12);}
+    #fontPop .fl{font-size:11px;font-weight:600;letter-spacing:.03em;text-transform:uppercase;color:rgba(255,255,255,.55);margin:12px 0 6px;}
+    #fontPop .fg{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+    #fontPop .ff{text-align:left;padding:7px 9px;border-radius:9px;background:rgba(255,255,255,.08);
+        box-shadow:inset 0 0 0 1px transparent;transition:background .12s;}
+    #fontPop .ff:hover{background:rgba(255,255,255,.14);}
+    #fontPop .ff.on{background:rgba(255,255,255,.2);box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.75);}
+    #fontPop .ff b{display:block;font-size:16px;font-weight:700;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:clip;}
+    #fontPop .ff i{display:block;font-style:normal;font-size:11px;color:rgba(255,255,255,.65);margin-top:1px;}
+    #fontPop .seg{display:flex;background:rgba(255,255,255,.08);border-radius:9px;padding:2px;}
+    #fontPop .seg button{flex:1;font-size:12.5px;padding:5px 0;border-radius:7px;}
+    #fontPop .seg button.on{background:rgba(255,255,255,.22);font-weight:700;}
+    #fontPop .sl{display:flex;align-items:center;gap:10px;}
+    #fontPop .sl input{flex:1;accent-color:#fff;}
+    #fontPop .sl span{font-size:12px;color:rgba(255,255,255,.6);min-width:40px;text-align:right;font-variant-numeric:tabular-nums;}
+    .aa{font-size:14px;font-weight:700;letter-spacing:-.02em;}
+    #mlh .aa{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.22);color:#fff;margin-right:8px;}
+    #mlh .rt{display:flex;align-items:center;}
+    #mFontH{display:none;}
+    body.v-mobile.pl #mFontH{display:grid;}
+
     #toast{position:fixed;left:50%;bottom:14px;z-index:30;transform:translate(-50%,8px);opacity:0;
         pointer-events:none;font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:999px;
         transition:opacity .2s,transform .2s;}
@@ -1224,7 +1358,7 @@
     body.v-mobile #lyrWrap{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 40px),transparent 100%);
         mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 40px),transparent 100%);}
     body.v-mobile #lyrScroll{padding:12px 18px 55%;}
-    body.v-mobile .lyric{font-size:calc(var(--lsz,24px) * .9);font-weight:700;letter-spacing:-.012em;line-height:1.32;
+    body.v-mobile .lyric{font-size:calc(var(--lsz,24px) * .9);font-weight:var(--lw,700);letter-spacing:-.012em;line-height:var(--llh,1.32);
         padding:5px 0;text-align:left !important;transform:none !important;filter:none !important;text-shadow:none !important;
         color:var(--dim);transition:color .3s ease;}
     body.v-mobile .lyric.past{color:rgba(255,255,255,.78);}
@@ -1252,7 +1386,7 @@
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #top{display:contents;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #artBox{order:1;margin-top:8px;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #mLine{display:flex;order:2;flex:none;min-height:84px;align-items:center;
-        padding:14px 4px;font-size:calc(var(--lsz,24px) * .78);font-weight:700;line-height:1.3;color:#fff;white-space:pre-wrap;}
+        padding:14px 4px;font-size:calc(var(--lsz,24px) * .78);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);color:#fff;white-space:pre-wrap;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #meta{order:3;margin:0;flex:none;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) .ttl{font-size:23px;line-height:30px;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #bottom{order:4;}
@@ -1275,7 +1409,7 @@
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
         height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
-        font-size:calc(var(--lsz,24px) * .86);font-weight:700;line-height:1.3;letter-spacing:-.01em;color:#fff;
+        font-size:calc(var(--lsz,24px) * .86);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
     #mLine.kara .w{background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.5) var(--p,0%) 100%);
@@ -1359,6 +1493,7 @@
   <div id="mhead">
     <button class="wb" id="mBack" title="Back" aria-label="Back">${I_DOWN}</button>
     <div class="mt" id="mTitle">Now Playing</div>
+    <button class="wb aa" id="mFontH" title="Lyrics font" aria-label="Lyrics font">Aa</button>
     <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
     <button class="wb" id="mClose" title="Close player" aria-label="Close player">${I_X}</button>
   </div>
@@ -1375,7 +1510,7 @@
 
   <div id="panel" class="nd">
     <div class="pv" id="pvLyrics">
-      <div id="mlh"><span>Lyrics</span><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div>
+      <div id="mlh"><span>Lyrics</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
       <div id="lyrWrap"><div id="lyrScroll" class="${centerLyrics ? 'centered' : ''}" style="--lsz:${fontSize}px"></div></div>
       <div id="lyrOff" title="Lyrics timing">
         <button id="offMinus" title="Lyrics earlier" aria-label="Lyrics earlier">−</button>
@@ -1423,6 +1558,7 @@
           <div class="sr"><span class="slbl">Center lyrics</span><div class="tog ${centerLyrics?'on':''}" id="togCenter"></div></div>
           <div class="sr"><span class="slbl">Pronunciation · Japanese</span><div class="tog ${pronJa?'on':''}" id="togPronJa"></div></div>
           <div class="sr"><span class="slbl">Pronunciation · English</span><div class="tog ${pronEn?'on':''}" id="togPronEn"></div></div>
+          <div class="sr"><span class="slbl">Lyrics font</span><button class="sbtn" id="sFont">Change…</button></div>
           <div class="sr"><span class="slbl">Lyrics size</span>
             <div class="fsrow"><input type="range" class="fsslider" id="fsSlider" min="14" max="40" value="${fontSize}"><span class="fsval" id="fsVal">${fontSize}px</span></div></div>
           <div class="sr fullOnly" id="offRow"><span class="slbl">Timing for this song</span></div>
@@ -1496,6 +1632,7 @@
   <input type="range" id="vol" min="0" max="100" value="50" aria-label="Volume">
   <span id="vPct">50</span>
 </div>
+<div id="fontPop" class="pop" role="dialog" aria-label="Lyrics font"></div>
 <div id="toast"></div>
 </body></html>`;
     }
@@ -2173,15 +2310,28 @@ void main() {
             if (full !== item) { curItem = full; showMeta(full); }
 
             // Songs only: ads and podcast episodes have no lyrics to look up.
-            const result = /^spotify:(track|local):/.test(full.uri) ? await fetchLyrics(full) : null;
-            if (token !== lyricReq) return;
-            currentLyrics = result;
+            if (!/^spotify:(track|local):/.test(full.uri)) { curSet = null; showLyrics(null, token); return; }
+            curSet = startLyrics(full, set => { if (token === lyricReq) showLyrics(set, token); });
+        }
+
+        // Shows the best lyrics so far; keeps the spinner until there's something or every source answered.
+        let curSet = null;
+        function showLyrics(set, token = lyricReq) {
+            const best = set ? pickLyrics(set, currentTrackUri) : null;
+            if (!best && set && !set.done) return;
+            if (best === currentLyrics && (best || el.lyrScroll.querySelector('.status .msg'))) return;
+            currentLyrics = best;
             renderLyrics();
             lyr.idx = -1;
             updateLyrics(lyrPos());
             lyricsLoop();
             refreshPron(token);
         }
+        // Settings that change which answer is best (order, on/off, word-by-word) just re-pick.
+        const repick = () => {
+            if (!curItem || !curSet) return;
+            curSet = startLyrics(curItem, set => { if (set === curSet) showLyrics(set); });
+        };
 
         // Readings can take a moment the first time (dictionaries download), so the lyrics
         // show first and are redrawn once they're ready.
@@ -2384,6 +2534,7 @@ void main() {
             if (was) { lastWake = -Infinity; wake(); }
             el.scrim.style.display = 'none';
             el.menu.style.display = 'none';
+            el.fontPop.style.display = 'none';
             el.volPop.classList.remove('show');
             el.volPop.style.display = '';
         }
@@ -2480,10 +2631,43 @@ void main() {
                 } },
                 ...(hasSleep() ? ['-', { t: sleepLabel(), sub: true, f: openSleep }] : []),
                 '-',
+                { t: 'Lyrics source', sub: true, f: () => openSources(), off: !curSet },
+                { t: 'Lyrics font…', f: () => win.setTimeout(() => openFont(dotsEl()), 0) },
+                '-',
                 { t: 'Settings', f: () => { panel = 'settings'; layout(); } },
             ], dotsEl());
         }
         el.bDots.onclick = openMenu;
+
+        // Every source's answer for this song; picking one pins it for the song.
+        function openSources(anchor = dotsEl()) {
+            const set = curSet, uri = currentTrackUri;
+            if (!set) return;
+            const pin = pins[uri];
+            const status = n => {
+                if (!usable(n)) return n === 'musixmatch' && !mxmToken ? 'needs token' : 'off';
+                if (set.pending.has(n)) return 'searching…';
+                const e = set.results[n];
+                if (!e) return 'not asked';
+                const r = e.r;
+                return !r ? 'not found' : r.karaoke ? 'word synced' : r.synced ? 'line synced' : 'not synced';
+            };
+            const shown = currentLyrics?.source;
+            renderMenu([
+                { t: `${!pin ? '✓ ' : ''}Automatic${!pin && shown ? ` (${PROV_NAMES[shown]})` : ''}`, f: () => choose(null) },
+                '-',
+                ...provOrder.map(n => ({
+                    t: `${pin === n ? '✓ ' : ''}${PROV_NAMES[n]} · ${status(n)}`,
+                    off: !set.results[n]?.r,
+                    f: () => choose(n),
+                })),
+            ], anchor);
+            function choose(n) {
+                setPin(uri, n);
+                showLyrics(set);
+                toast(n ? `Lyrics from ${PROV_NAMES[n]} for this song` : 'Lyrics source: automatic');
+            }
+        }
 
         async function openPlaylists() {
             let lists = [];
@@ -2597,6 +2781,88 @@ void main() {
                 raf = null;
             }
         }
+
+        /* Lyrics font */
+
+        function applyFont() {
+            const root = doc.documentElement.style, f = FONTS[lf.font];
+            if (f.stack) root.setProperty('--lfont', `${f.stack},-apple-system,'Segoe UI',system-ui,sans-serif`);
+            else root.removeProperty('--lfont');
+            lf.w ? root.setProperty('--lw', lf.w) : root.removeProperty('--lw');
+            lf.lh ? root.setProperty('--llh', lf.lh) : root.removeProperty('--llh');
+            lf.pz ? root.setProperty('--pz', lf.pz) : root.removeProperty('--pz');
+            // One stylesheet with the chosen web font (a <style>, which the PiP cleanup leaves alone).
+            let st = doc.getElementById('lyrFontCss');
+            if (!st) { st = doc.createElement('style'); st.id = 'lyrFontCss'; doc.head.appendChild(st); }
+            const want = f.q ? `@import url('https://fonts.googleapis.com/css2?family=${f.q}&display=swap');` : '';
+            if (st.textContent !== want) st.textContent = want;
+        }
+        // The panel previews every face, so all of them load while it's open.
+        function previewFonts() {
+            let st = doc.getElementById('lyrFontPrev');
+            if (st) return;
+            st = doc.createElement('style');
+            st.id = 'lyrFontPrev';
+            st.textContent = Object.values(FONTS).filter(f => f.q)
+                .map(f => `@import url('https://fonts.googleapis.com/css2?family=${f.q}&display=swap');`).join('\n');
+            doc.head.appendChild(st);
+        }
+        function drawFont() {
+            const W = [['', 'Default'], ['500', 'Regular'], ['700', 'Bold'], ['900', 'Heavy']];
+            const lh = lf.lh || 1.3, pz = lf.pz || .6;
+            el.fontPop.innerHTML = `
+                <div class="fh"><span class="ft">Lyrics font</span><button class="fr" data-reset>Reset</button></div>
+                <div class="fg">${Object.entries(FONTS).map(([k, f]) => `
+                    <button class="ff${lf.font === k ? ' on' : ''}" data-font="${k}" style="font-family:${f.stack ? `${f.stack},` : ''}system-ui,sans-serif">
+                      <b>가나 あい Aa</b><i>${f.name}</i></button>`).join('')}</div>
+                <div class="fl">Weight</div>
+                <div class="seg">${W.map(([v, t]) => `<button data-w="${v}" class="${(lf.w || '') === v ? 'on' : ''}">${t}</button>`).join('')}</div>
+                <div class="fl">Size</div>
+                <div class="sl"><input type="range" data-k="size" min="14" max="40" value="${fontSize}"><span>${fontSize}px</span></div>
+                <div class="fl">Line spacing</div>
+                <div class="sl"><input type="range" data-k="lh" min="1.05" max="1.8" step="0.05" value="${lh}"><span>${(+lh).toFixed(2)}</span></div>
+                <div class="fl">Pronunciation size</div>
+                <div class="sl"><input type="range" data-k="pz" min="0.4" max="0.9" step="0.05" value="${pz}"><span>${Math.round(pz * 100)}%</span></div>`;
+        }
+        function fontChanged() {
+            saveLf();
+            applyFont();
+            if (lyr.active) scrollToLine(lyr.active, false);
+        }
+        function openFont(anchor) {
+            previewFonts();
+            drawFont();
+            openPop(el.fontPop, anchor);
+        }
+        el.fontPop.addEventListener('click', e => {
+            const b = e.target.closest('button');
+            if (!b) return;
+            if (b.dataset.font) lf.font = b.dataset.font;
+            else if (b.dataset.w != null) lf.w = b.dataset.w || undefined;
+            else if (b.hasAttribute('data-reset')) { for (const k of Object.keys(lf)) delete lf[k]; lf.font = 'system'; setSize(24); }
+            fontChanged();
+            drawFont();
+        });
+        el.fontPop.addEventListener('input', e => {
+            const i = e.target, v = +i.value, k = i.dataset.k;
+            if (k === 'size') { setSize(v); i.nextElementSibling.textContent = `${v}px`; }
+            if (k === 'lh') { lf.lh = v; i.nextElementSibling.textContent = v.toFixed(2); }
+            if (k === 'pz') { lf.pz = v; i.nextElementSibling.textContent = `${Math.round(v * 100)}%`; }
+            fontChanged();
+        });
+        function setSize(v) {
+            fontSize = v;
+            el.fsSlider.value = v;
+            el.fsVal.textContent = `${v}px`;
+            el.lyrScroll.style.setProperty('--lsz', `${v}px`);
+            el.mLine.style.setProperty('--lsz', `${v}px`);
+            localStorage.setItem('wp7-fs', v);
+        }
+        el.mFont.onclick  = e => { e.stopPropagation(); openFont(el.mFont); };
+        el.mFontH.onclick = () => openFont(el.mFontH);
+        el.sFont.onclick  = () => openFont(el.sFont);
+        el.mLine.style.setProperty('--lsz', `${fontSize}px`);
+        applyFont();
 
         // The single line shown over the Canvas.
         function setLine(line) {
@@ -2725,6 +2991,7 @@ void main() {
             fontSize = parseInt(e.target.value);
             el.fsVal.textContent = `${fontSize}px`;
             el.lyrScroll.style.setProperty('--lsz', `${fontSize}px`);
+            el.mLine.style.setProperty('--lsz', `${fontSize}px`);
             localStorage.setItem('wp7-fs', fontSize);
         };
         const togPron = (k, elx) => () => {
@@ -2740,17 +3007,17 @@ void main() {
             karaoke = !karaoke;
             el.togKara.classList.toggle('on', karaoke);
             localStorage.setItem('wp7-kara', karaoke);
-            lyricCache.clear();
             renderLyrics();
             lyr.idx = -1;
+            repick();
         };
         el.mxmTok.onchange = e => {
             mxmToken = e.target.value.trim();
             localStorage.setItem('wp7-mxm', mxmToken);
-            lyricCache.clear();
+            for (const set of lyricSets.values()) delete set.results.musixmatch;
+            repick();
         };
 
-        const PROV_NAMES = { spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
         function drawProviders() {
             el.provList.innerHTML = provOrder.map((p, i) => `
       <div class="sr prow">
@@ -2773,7 +3040,7 @@ void main() {
                 localStorage.setItem('wp7-prov-off', [...provOff].join(','));
             }
             drawProviders();
-            lyricCache.clear();
+            repick();
         };
         drawProviders();
 
