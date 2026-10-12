@@ -1804,6 +1804,14 @@
     #mmBar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.2);}
     #mmFill{height:100%;background:#fff;transform-origin:left;transform:scaleX(0);}
 
+    /* Drag strip for the phone view. The page there is a scroller, and drag regions inside a
+       scroller aren't reliable, so this strip sits outside <body>, over the header's title
+       (between the back button and the buttons on the right). */
+    #dragbar{display:none;}
+    html.vm #dragbar{display:block;position:fixed;top:0;left:56px;right:150px;height:52px;z-index:50;
+        -webkit-app-region:drag;app-region:drag;}
+    html.vm.vm-ov #dragbar{display:none;}
+
     /* In the phone view the page scrolls, so only the headers drag the window. */
     body.v-mobile *{-webkit-app-region:no-drag;app-region:no-drag;}
     body.v-mobile #mhead,body.v-mobile #mhead .mt,body.v-mobile #mmini{-webkit-app-region:drag;app-region:drag;}
@@ -2142,6 +2150,10 @@
         const el = {};
         for (const node of doc.querySelectorAll('[id]')) el[node.id] = node;
         const body = doc.body;
+        // Outside <body> on purpose (see #dragbar in the styles).
+        const dragbar = doc.createElement('div');
+        dragbar.id = 'dragbar';
+        doc.documentElement.appendChild(dragbar);
 
         // Korean interface: translate labels as they appear. Song, artist and playlist names,
         // lyrics and numbers are left alone.
@@ -2293,6 +2305,7 @@
             body.classList.toggle('pl', panel === 'lyrics');
             body.classList.toggle('pq', panel === 'queue');
             body.classList.toggle('ps', panel === 'settings');
+            doc.documentElement.classList.toggle('vm', v === 'mobile');
             el.pvLyrics.classList.toggle('show', panel === 'lyrics' || (v === 'mobile' && !panel));
             paintTitle();
             el.pvQueue.classList.toggle('show', panel === 'queue');
@@ -3037,6 +3050,7 @@ void main() {
         function closePops() {
             const was = body.classList.contains('ov');
             body.classList.remove('ov');
+            doc.documentElement.classList.remove('vm-ov');
             if (was) { lastWake = -Infinity; wake(); }
             el.scrim.style.display = 'none';
             el.menu.style.display = 'none';
@@ -3059,6 +3073,7 @@ void main() {
         function openPop(pop, anchor) {
             win.clearTimeout(idleTimer);
             body.classList.add('ov');
+            doc.documentElement.classList.add('vm-ov');
             el.scrim.style.display = 'block';
             if (pop === el.volPop) pop.classList.add('show'); else pop.style.display = 'block';
             place(pop, anchor);
