@@ -811,6 +811,16 @@
           continue;
         }
         if (p === 'Y' || p === 'W') continue;
+        // Consonant + y/w glide + vowel is one syllable: beautiful 뷰, music 뮤, queen 퀸.
+        // (w merges only after k/g, as in Korean spelling: 퀸, 과; but 트웰브, 스위치.)
+        if ((next === 'Y' || (next === 'W' && (p === 'K' || p === 'G'))) && EC[p] != null && isV(ph[i + 2] || '')) {
+          const v0 = EV[ph[i + 2]][0];
+          const v = next === 'Y' ? (YV[v0] ?? v0) : (WV[v0] ?? v0);
+          add(EC[p], v);
+          for (let k = 1; k < EV[ph[i + 2]].length; k++) if (ph[i + 2] !== 'OW') add(11, EV[ph[i + 2]][k]);
+          i += 2;
+          continue;
+        }
         if (next && (isV(next))) {
           // Onset: consonant + vowel in one syllable.
           const vs = EV[next];
@@ -1505,6 +1515,20 @@
         .lyric{transition:color .3s;transform:none !important}
         .lyric.kara.active .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}
     }
+
+    /* The word being sung lifts a little and is already bright; it settles once it's done.
+       The reading line under a word-synced line fills at the same pace. */
+    .lyric.kara .w,#mLine.kara .w{display:inline-block;transform-origin:50% 80%;
+        transition:transform .28s cubic-bezier(.3,1.6,.5,1);}
+    html body .lyric.kara.active .w.on,html body #mLine.kara .w.on{transform:translateY(-.05em) scale(1.08);
+        background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.78) var(--p,0%) 100%);
+        text-shadow:none;filter:drop-shadow(0 0 10px rgba(255,255,255,.35));}
+    .lyric.kara .pron,#mLine.kara .pron{width:fit-content;}
+    #lyrScroll.centered .lyric.kara .pron{margin-left:auto;margin-right:auto;}
+    html body .lyric.kara.active .pron,html body #mLine.kara .pron{
+        background-image:linear-gradient(90deg,#fff 0 var(--pp,0%),rgba(255,255,255,.5) var(--pp,0%) 100%);
+        -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;opacity:1;}
+    @media (prefers-reduced-motion:reduce){.lyric.kara .w,#mLine.kara .w{transition:none;transform:none !important;}}
 
     /* Up Next */
     .qhead{display:flex;align-items:center;justify-content:space-between;padding:4px var(--pad) 8px;}
@@ -3597,19 +3621,35 @@ void main() {
             if (wi !== lyr.word) {
                 for (let i = 0; i < words.length; i++) {
                     if (!spans[i]) break;
+                    // .on: the word being sung (lifts a little, then settles when it's done).
                     spans[i].classList.toggle('done', i < wi);
+                    spans[i].classList.toggle('on', i === wi);
                     if (i > wi) spans[i].style.setProperty('--p', '0%');
                     mSpans[i]?.classList.toggle('done', i < wi);
+                    mSpans[i]?.classList.toggle('on', i === wi);
                     if (i > wi) mSpans[i]?.style.setProperty('--p', '0%');
                 }
                 lyr.word = wi;
+                // Share of the line each word takes, for the reading line below.
+                if (lyr.lensFor !== lines[ai]) {
+                    lyr.lensFor = lines[ai];
+                    lyr.lens = words.map(x => Math.max(1, x.text.trim().length));
+                    lyr.total = lyr.lens.reduce((a, b) => a + b, 0);
+                }
             }
+            let sung = 0;
             if (wi >= 0) {
-                const w = words[wi];
-                const pct = `${(clamp01((pos - w.t) / (w.d || 1)) * 100).toFixed(1)}%`;
+                const w = words[wi], p = clamp01((pos - w.t) / (w.d || 1));
+                const pct = `${(p * 100).toFixed(1)}%`;
                 spans[wi]?.style.setProperty('--p', pct);
                 mSpans[wi]?.style.setProperty('--p', pct);
+                for (let i = 0; i < wi; i++) sung += lyr.lens[i];
+                sung += lyr.lens[wi] * p;
             }
+            // The Korean reading fills at the same pace as the words above it.
+            const pp = `${(lyr.total ? sung / lyr.total * 100 : 0).toFixed(1)}%`;
+            lyr.active.style.setProperty('--pp', pp);
+            el.mLine.style.setProperty('--pp', pp);
         }
 
         el.lyrScroll.onclick = e => {
