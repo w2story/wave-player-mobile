@@ -28,7 +28,7 @@
     // summary = short list on the update screen; notes = full changelog.
     const VERSION = 'v3';
     // This edition (phone view, translation, …): its own version and where updates come from.
-    const MOBILE_VERSION = '1.1.0';
+    const MOBILE_VERSION = '1.1.1';
     const REPO = 'w2story/wave-player-mobile';
 
     const CHANGELOG = [
@@ -797,6 +797,21 @@
                 } catch {}
             }
         }
+        // Last try: the title alone, since LRCLIB may list the song under another spelling of
+        // the artist or a longer title ("sweet little kitty (낭만고양이)" by CHERRYFILTER). Only
+        // versions of the same length whose title contains ours, or is contained in it, count.
+        if (!hit?.syncedLyrics && !hit?.plainLyrics && secs(track)) {
+            const norm = s => String(s || '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
+            const want = norm(cleanTitle(base.track_name));
+            try {
+                const list = await cos('https://lrclib.net/api/search?' + new URLSearchParams({ q: cleanTitle(base.track_name) }));
+                const ok = (Array.isArray(list) ? list : []).filter(x => {
+                    const t = norm(x.trackName);
+                    return want && t && Math.abs((x.duration || 0) - secs(track)) <= 4 && (t.includes(want) || want.includes(t));
+                }).sort((a, b) => Math.abs(a.duration - secs(track)) - Math.abs(b.duration - secs(track)));
+                hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || ok[0] || hit;
+            } catch {}
+        }
 
         if (hit?.syncedLyrics) {
             const lines = parseLrc(hit.syncedLyrics);
@@ -1434,7 +1449,7 @@
     const HIT_TTL  = 30 * 864e5;    // keep found lyrics a month
     const MISS_TTL = 3 * 864e5;     // retry "not found" after three days
     const TIMED_OUT = Symbol('timeout');           // also: the source failed; nothing is remembered
-    const CACHE_EPOCH = Date.UTC(2026, 9, 13);
+    const CACHE_EPOCH = Date.UTC(2026, 9, 14);
     const lyricSets = new Map();    // uri -> { results: {name: {r, at}}, pending: Set, done }
 
     // Empty lines are end markers: they end the line before them, then go.
@@ -2067,8 +2082,16 @@
     #mlh .aa{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.22);color:#fff;margin-right:8px;}
     #mlh #mHide{margin-right:8px;}
     #mlh .rt{display:flex;align-items:center;}
-    #mFontH,#mListH{display:none;}
+    #mFontH,#mListH,#mSrcH{display:none;}
     body.v-mobile.pl #mFontH,body.v-mobile.pl #mListH{display:grid;}
+    body.v-mobile.pl #mSrcH{display:flex;}
+    /* Lyrics source pill: the source in use; opens the per-song source menu. */
+    .srcb{height:30px;max-width:130px;padding:0 11px;margin-right:8px;border:0;border-radius:15px;background:rgba(0,0,0,.22);
+        color:#fff;font:inherit;font-size:12px;font-weight:700;align-items:center;gap:4px;cursor:pointer;
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:none;}
+    #mlh .srcb{display:flex;}
+    .srcb.pin{box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.55);}
+    .srcb:hover{background:rgba(0,0,0,.34);}
 
     #toast{position:fixed;left:50%;bottom:14px;z-index:30;transform:translate(-50%,8px);opacity:0;
         pointer-events:none;font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:999px;
@@ -2409,6 +2432,7 @@
   <div id="mhead">
     <button class="wb" id="mBack" title="Cover view" aria-label="Cover view">${I_DOWN}</button>
     <div class="mt" id="mTitle">Now Playing</div>
+    <button class="srcb" id="mSrcH" title="Lyrics source" aria-label="Lyrics source" data-raw></button>
     <button class="wb aa" id="mFontH" title="Lyrics font" aria-label="Lyrics font">Aa</button>
     <button class="wb" id="mListH" title="Playing Next" aria-label="Playing Next">${I_LIST}</button>
     <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
@@ -2428,7 +2452,7 @@
 
   <div id="panel" class="nd">
     <div class="pv" id="pvLyrics">
-      <div id="mlh"><span>Lyrics preview</span><div class="rt"><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mHide" title="Fold lyrics preview" aria-label="Fold lyrics preview">${I_FOLD}</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
+      <div id="mlh"><span>Lyrics preview</span><div class="rt"><button class="srcb" id="mSrc" title="Lyrics source" aria-label="Lyrics source" data-raw></button><button class="wb aa" id="mFont" title="Lyrics font" aria-label="Lyrics font">Aa</button><button class="wb" id="mHide" title="Fold lyrics preview" aria-label="Fold lyrics preview">${I_FOLD}</button><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div></div>
       <div id="lyrWrap"><div id="lyrScroll" class="${centerLyrics ? 'centered' : ''}" style="--lsz:${fontSize}px"></div></div>
       <div id="lyrOff" title="Lyrics timing">
         <button id="offMinus" title="Lyrics earlier" aria-label="Lyrics earlier">−</button>
@@ -3329,6 +3353,7 @@ void main() {
             const token = ++lyricReq;
             loadOffset(item.uri);
             currentLyrics = null;
+            paintSrc();
             lyr.active = null;
             el.lyrScroll.innerHTML = '<div class="status"><div class="spinner"></div></div>';
             lyricsLoop();
@@ -3349,6 +3374,7 @@ void main() {
             if (!best && set && !set.done) return;
             if (best === currentLyrics && (best || el.lyrScroll.querySelector('.status .msg'))) return;
             currentLyrics = best;
+            paintSrc();
             renderLyrics();
             lyr.idx = -1;
             updateLyrics(lyrPos());
@@ -3684,6 +3710,18 @@ void main() {
         }
         el.bDots.onclick = openMenu;
 
+        // The source pills (lyrics card and full lyrics): which source is showing, outlined when pinned.
+        function paintSrc() {
+            const n = currentLyrics?.source;
+            const t = `${n ? PROV_NAMES[n] : tr('Lyrics source')} ▾`;
+            for (const b of [el.mSrc, el.mSrcH]) {
+                b.textContent = t;
+                b.classList.toggle('pin', !!pins[currentTrackUri]);
+            }
+        }
+        el.mSrc.onclick = e => { e.stopPropagation(); openSources(el.mSrc); };
+        el.mSrcH.onclick = () => openSources(el.mSrcH);
+
         // Every source's answer for this song; picking one pins it for the song.
         function openSources(anchor = dotsEl()) {
             const set = curSet, uri = currentTrackUri;
@@ -3713,6 +3751,7 @@ void main() {
             function choose(n) {
                 setPin(uri, n);
                 showLyrics(set);
+                paintSrc();
                 toast(n ? `Lyrics from ${PROV_NAMES[n]} for this song` : 'Lyrics source: automatic');
             }
         }
