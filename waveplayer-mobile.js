@@ -1531,6 +1531,7 @@
         text-shadow:none;filter:drop-shadow(0 0 10px rgba(255,255,255,.35));}
     .lyric.kara .pron,#mLine.kara .pron{width:fit-content;}
     #lyrScroll.centered .lyric.kara .pron{margin-left:auto;margin-right:auto;}
+    body.v-mobile #lyrScroll.centered .lyric.kara .pron{margin-left:0;margin-right:0;}
     html body .lyric.kara.active .pron,html body #mLine.kara .pron{
         background-image:linear-gradient(90deg,#fff 0 var(--pp,0%),rgba(255,255,255,.72) var(--pp,0%) 100%);
         -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;opacity:1;
