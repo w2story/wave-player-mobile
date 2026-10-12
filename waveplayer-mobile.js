@@ -1800,14 +1800,15 @@
     body.v-mobile.nocard:not(.p) #lyrWrap,body.v-mobile.nocard:not(.p) #lyrOff{display:none;}
     body.v-mobile.nocard:not(.p) #mlh{padding-bottom:12px;}
     body.v-mobile.nocard{--capH:360px;--artH:500px;}
-    /* The folded card sits at the bottom edge; with the cover, the free space is shared above
-       the cover and above the card so the player sits in the middle. (With a Canvas the line
-       over the video stays put, so only the card moves.) */
-    body.v-mobile.nocard:not(.p) #panel{margin-top:auto;}
+    /* Folded: the card stays right under the controls. With the cover, the free space goes
+       above and below the whole player so it sits in the middle; with a Canvas the line over
+       the video grows instead, so the controls and card sit at the bottom. */
+    html body.v-mobile.nocard:not(.p):not(.pl):not(.ps) #panel{margin-top:8px;}
+    html body.v-mobile.nocard:not(.canvas):not(.p):not(.pl):not(.ps) #panel{margin-bottom:auto;}
     body.v-mobile.nocard:not(.canvas):not(.p) #artBox{margin-top:auto;}
     /* With a Canvas, the line over the video moves down so the controls meet the folded card,
        and the fade follows it (same --fy idea as above). */
-    html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #mLine{height:max(60px,calc(100vh - 380px));}
+    html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #mLine{height:auto;flex:1;min-height:60px;}
     /* The fade always finishes inside the video (else its bottom edge shows as a seam). */
     html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #xbg{--fy:min(calc(52px + max(60px,calc(100vh - 380px))),calc(100vw * 16 / 9 - 200px));}
 
