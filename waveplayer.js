@@ -328,7 +328,10 @@
         if (!raw.length) return null;
         open.text = body.slice(open.end);
         const words = raw.map(w => ({ t: w.t, text: w.text })).filter(w => w.text);
-        return words.length > 1 ? words : null;
+        if (words.length < 2) return null;
+        // A closing tag with nothing after it marks when the line ends.
+        if (!open.text.trim()) words.end = open.t;
+        return words;
     }
 
     function parseLrc(text) {
@@ -345,9 +348,11 @@
             if (!stamps.length) continue;
             const body  = raw.slice(end);
             const plain = body.replace(WORD_TAG, '').trim();
-            if (!plain) continue;
+            // An empty timestamp ends the line before it (kept as a marker, see markGaps).
+            if (!plain) { for (const t of stamps) out.push(mkLine(t, '')); continue; }
             const words = parseWordTags(body);
-            for (const t of stamps) out.push(mkLine(t, plain, words && words.map(w => ({ ...w }))));
+            const d = words?.end != null ? Math.max(0, words.end - stamps[0]) : undefined;
+            for (const t of stamps) out.push(mkLine(t, plain, words && words.map(w => ({ ...w })), d));
         }
         return out.sort((a, b) => a.t - b.t);
     }
@@ -393,8 +398,7 @@
     async function fromSpotify(track) {
         const id = track.uri.split(':').pop();
         const norm = lines => lines
-            .map(l => mkLine(parseInt(l.startTimeMs || l.time || 0), (l.words || l.text || '').trim()))
-            .filter(l => l.text && l.text !== '♪');
+            .map(l => mkLine(parseInt(l.startTimeMs || l.time || 0), (l.words || l.text || '').trim().replace(/^♪$/, '')));
 
         for (const url of [
             `https://spclient.wg.spotify.com/color-lyrics/v2/track/${id}?format=json&market=from_token`,
@@ -403,7 +407,7 @@
             try {
                 const r = await cos(url);
                 const lines = r?.lyrics?.lines || r?.lines;
-                if (lines?.length) return {
+                if (lines?.some(l => (l.words || l.text || '').trim() && (l.words || l.text).trim() !== '♪')) return {
                     synced: r?.lyrics?.syncType !== 'UNSYNCED',
                     lines: norm(lines),
                 };
@@ -411,7 +415,7 @@
         }
         try {
             const r = await Spicetify.Platform?.Lyrics?.getLyrics(track.uri);
-            if (r?.lines?.length) return { synced: true, lines: norm(r.lines) };
+            if (r?.lines?.some(l => (l.words || l.text || '').trim())) return { synced: true, lines: norm(r.lines) };
         } catch {}
         return null;
     }
@@ -733,7 +737,7 @@
         const [tk, dict] = await Promise.all([ja ? loadKuromoji() : null, en ? loadCmu() : null]);
         for (const l of lines) {
             l.pron = null;
-            if (RE_HANGUL.test(l.text)) continue;
+            if (l.dots || RE_HANGUL.test(l.text)) continue;
             let p = null;
             if (tk && RE_JP.test(l.text)) p = linePron(tk.tokenize(l.text), dict);
             else if (dict && RE_LATIN.test(l.text)) p = enText(l.text, dict).replace(/\s+/g, ' ').trim();
@@ -768,6 +772,31 @@
     const MISS_TTL = 3 * 864e5;     // retry "not found" after three days
     const TIMED_OUT = Symbol('timeout');
     const lyricSets = new Map();    // uri -> { results: {name: {r, at}}, pending: Set, done }
+
+    // Empty lines are end markers: they end the line before them, then go.
+    function markGaps(lines) {
+        const out = [];
+        for (const l of lines) {
+            if (l.text) { out.push(l); continue; }
+            const p = out[out.length - 1];
+            if (p && l.t > p.t && (p.d == null || p.t + p.d > l.t)) p.d = l.t - p.t;
+        }
+        lines.splice(0, lines.length, ...out);
+    }
+
+    // Pauses of INTERLUDE ms or more (and the wait before the first line) get a "• • •" line
+    // that fills in as the next line comes, like Apple Music.
+    const INTERLUDE = 3000;
+    function addInterludes(lines) {
+        const out = [];
+        if (lines[0]?.t >= INTERLUDE) out.push({ t: 0, d: lines[0].t, text: '', words: null, dots: true });
+        lines.forEach((l, i) => {
+            out.push(l);
+            const next = lines[i + 1], end = l.t + (l.d ?? 0);
+            if (next && next.t - end >= INTERLUDE) out.push({ t: end, d: next.t - end, text: '', words: null, dots: true });
+        });
+        lines.splice(0, lines.length, ...out);
+    }
 
     // Songs the user pinned to one source ("Lyrics source" in the ⋯ menu).
     const pins = (() => { try { return JSON.parse(localStorage.getItem('wp7-lyr-pin') || '{}'); } catch { return {}; } })();
@@ -848,7 +877,13 @@
                 Promise.race([Promise.resolve().then(() => SOURCES[name](track)).catch(() => null), timer]).then(r => {
                     set.pending.delete(name);
                     if (r !== TIMED_OUT) {
-                        if (r?.lines?.length) { fillGaps(r.lines); r.karaoke = r.lines.some(l => l.words); r.source = name; }
+                        if (r?.lines?.length) markGaps(r.lines);
+                        if (r?.lines?.length) {
+                            fillGaps(r.lines);
+                            r.karaoke = r.lines.some(l => l.words);
+                            if (r.synced) addInterludes(r.lines);
+                            r.source = name;
+                        }
                         else r = null;
                         set.results[name] = { r, at: Date.now() };
                     }
@@ -924,6 +959,7 @@
     const I_HEARTF = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="#1ed760"/><path d="m7.6 12.3 3 3 5.8-6.2" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const I_TIMER  = svg('<circle cx="12" cy="13.5" r="7.2"/><path d="M12 13.5V9.6M9.6 3.5h4.8"/>', 'st');
     const I_EQ     = '<svg viewBox="0 0 16 16" class="eq"><rect x="1.5" y="7" width="2.6" height="7"/><rect x="6.7" y="3" width="2.6" height="11"/><rect x="11.9" y="5.5" width="2.6" height="8.5"/></svg>';
+    const I_VERIFIED = '<svg viewBox="0 0 24 24" class="vf"><path fill="#4cb3ff" d="m12 1.6 2.4 1.8 3-.1.9 2.8 2.5 1.7-.9 2.9.9 2.9-2.5 1.7-.9 2.8-3-.1L12 20.4l-2.4-1.8-3 .1-.9-2.8-2.5-1.7.9-2.9-.9-2.9 2.5-1.7.9-2.8 3 .1z"/><path d="m8.2 12.2 2.6 2.6 5-5.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
 
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
@@ -945,6 +981,8 @@
     *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
     :root{--accent:#fc3c44;--pad:22px;}
     html,body{height:100%}
+    /* The body is the scroller (phone view), not the window. */
+    html{overflow:hidden;}
     body{
         font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI Variable Text','Segoe UI',system-ui,sans-serif;
         color:#fff;background:#141417;overflow:hidden;user-select:none;
@@ -1165,6 +1203,20 @@
     .lyric.active{color:#fff;transform:scale(1.04);filter:blur(0);will-change:transform;
         text-shadow:0 0 30px rgba(255,255,255,.18);}
     .lyric.kara{white-space:pre-wrap;}
+    /* Pauses: three dots that fill in one by one, breathing gently. */
+    .lyric.dots{display:none;align-items:center;gap:calc(var(--lsz,24px) * .32);height:calc(var(--lsz,24px) * 1.5);}
+    .lyric.dots.active{display:flex;animation:dotsIn .45s cubic-bezier(.3,1.4,.5,1);}
+    #lyrScroll.centered .lyric.dots{justify-content:center;}
+    .dots .dt{width:calc(var(--lsz,24px) * .4);height:calc(var(--lsz,24px) * .4);border-radius:50%;background:#fff;flex:none;
+        animation:breathe 2.6s ease-in-out infinite;}
+    .dots .dt:nth-child(1){opacity:calc(.28 + .72 * clamp(0, var(--p,0) * 3, 1));}
+    .dots .dt:nth-child(2){opacity:calc(.28 + .72 * clamp(0, var(--p,0) * 3 - 1, 1));}
+    .dots .dt:nth-child(3){opacity:calc(.28 + .72 * clamp(0, var(--p,0) * 3 - 2, 1));}
+    #mLine.dots .in{display:flex;align-items:center;gap:calc(var(--lsz,24px) * .3);}
+    @keyframes dotsIn{from{opacity:0;transform:scale(.5)}to{opacity:1}}
+    @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.14)}}
+    @media (prefers-reduced-motion:reduce){.dots .dt,.lyric.dots.active{animation:none}}
+
     /* Korean reading under the line. */
     .pron{font-size:calc(var(--pz,.6) * 1em);font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
         -webkit-text-fill-color:currentColor;}
@@ -1422,6 +1474,67 @@
     body.v-mobile.canvas:not(.pl):not(.ps) #panel{flex:1;min-height:180px;}
     @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
 
+    /* Scrolling page: Now Playing fills the window; artist and credits cards follow it,
+       and a mini header with the song and play button appears once the controls scroll away. */
+    #mmore,#mmini{display:none;}
+    body.v-mobile{position:relative;background:#121212;}
+    body.v-mobile:not(.pl):not(.ps){overflow-y:auto;overflow-x:hidden;scrollbar-width:none;}
+    body.v-mobile::-webkit-scrollbar{display:none;}
+    body.v-mobile #mbg{position:absolute;top:0;left:0;right:0;bottom:auto;height:calc(100vh + 180px);}
+    body.v-mobile:not(.canvas) #mbg,body.v-mobile.pq:not(.canvas) #mbg{
+        background:linear-gradient(180deg,var(--mtop,#3b3b44) 0,var(--mbot,#1a1a1a) 100vh,#121212 calc(100vh + 180px));}
+    body.v-mobile.canvas:not(.pl):not(.ps) #mbg{background:linear-gradient(180deg,var(--cvbg,var(--mtop,#121212)) 0,
+        var(--cvbg,var(--mtop,#121212)) 100vh,#121212 calc(100vh + 180px));}
+    body.v-mobile.pl #mbg{height:100vh;}
+    body.v-mobile #xbg{position:absolute;}
+    body.v-mobile #main{height:100vh;}
+    body.v-mobile:not(.pl):not(.ps) #mmore:not(:empty){display:flex;flex-direction:column;gap:14px;position:relative;z-index:2;
+        padding:6px 20px 28px;}
+    .mcard{background:#282828;border-radius:12px;overflow:hidden;}
+    .mcard:empty{display:none;}
+    .ahero{position:relative;aspect-ratio:3/2;background:#333 center 22%/cover no-repeat;}
+    .ahero::before{content:'';position:absolute;inset:0 0 auto;height:70px;background:linear-gradient(rgba(0,0,0,.45),transparent);}
+    .clb{position:relative;font-size:16px;font-weight:700;padding:16px 18px 0;}
+    .ahero .clb{position:absolute;top:0;left:0;}
+    .abody{padding:16px 18px 18px;}
+    .arow{display:flex;align-items:center;gap:12px;}
+    .arow>div{flex:1;min-width:0;}
+    .aname{display:flex;align-items:center;gap:6px;font-size:20px;font-weight:800;letter-spacing:-.01em;}
+    .aname span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .vf{width:18px;height:18px;flex:none;}
+    .ast{font-size:13.5px;color:rgba(255,255,255,.65);margin-top:3px;}
+    .fol{flex:none;font-size:13px;font-weight:700;padding:6px 15px;border-radius:999px;
+        box-shadow:inset 0 0 0 1px rgba(255,255,255,.55);}
+    .fol:hover{box-shadow:inset 0 0 0 1px #fff;transform:scale(1.03);}
+    .abio{margin-top:14px;font-size:13.5px;line-height:1.5;color:rgba(255,255,255,.72);cursor:pointer;
+        display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line;user-select:text;}
+    .abio.open{-webkit-line-clamp:unset;}
+    .crow{display:flex;align-items:center;gap:12px;padding:10px 18px;}
+    .crow:first-of-type{padding-top:14px;}
+    .crow:last-child{padding-bottom:18px;}
+    .crow>div{flex:1;min-width:0;}
+    .cn{font-size:15px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .lnk{cursor:pointer;} .lnk:hover{text-decoration:underline;}
+    .cro{font-size:13px;color:rgba(255,255,255,.62);margin-top:2px;}
+
+    body.v-mobile.scrolled:not(.pl):not(.ps) #mmini{display:flex;}
+    #mmini{position:fixed;top:0;left:0;right:0;z-index:7;height:62px;align-items:center;gap:4px;padding:0 8px 0 16px;
+        background:var(--mtop,#3b3b44);box-shadow:0 4px 14px rgba(0,0,0,.35);animation:fadeIn .2s ease;}
+    .mmw{flex:1;min-width:0;cursor:pointer;}
+    .mmt{font-size:14.5px;font-weight:700;}
+    .mms{font-size:12.5px;color:rgba(255,255,255,.65);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    #mmHeart.on{color:#1ed760;background:none;}
+    body.v-mobile .lyric.dots{justify-content:flex-start !important;}
+    #mmPlay svg{width:22px;height:22px;}
+    #mmBar{position:absolute;left:0;right:0;bottom:0;height:2px;background:rgba(255,255,255,.2);}
+    #mmFill{height:100%;background:#fff;transform-origin:left;transform:scaleX(0);}
+
+    /* In the phone view the page scrolls, so only the headers drag the window. */
+    body.v-mobile *{-webkit-app-region:no-drag;app-region:no-drag;}
+    body.v-mobile #mhead,body.v-mobile #mhead .mt,body.v-mobile #mmini{-webkit-app-region:drag;app-region:drag;}
+    body.v-mobile #mhead button,body.v-mobile #mmini button,body.v-mobile #mmini .mmw,body.v-mobile #mmini .mmw *{
+        -webkit-app-region:no-drag;app-region:no-drag;}
+
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
     body.v-mobile.ps #top,body.v-mobile.ps #bottom{display:none;}
@@ -1615,6 +1728,16 @@
     </div>
   </div>
   <div id="mScrim" class="nd"></div>
+</div>
+<div id="mmore">
+  <section class="mcard" id="mArtist"></section>
+  <section class="mcard" id="mCredits"></section>
+</div>
+<div id="mmini">
+  <div class="mmw" id="mmGo"><div class="mmt mq" id="mmTW"><span id="mmT"></span></div><div class="mms" id="mmS"></div></div>
+  <button class="cb" id="mmHeart" title="Save to Liked Songs" aria-label="Save to Liked Songs"></button>
+  <button class="cb" id="mmPlay" title="Play" aria-label="Play"><svg viewBox="0 0 24 24" id="mmIco"></svg></button>
+  <div id="mmBar"><div id="mmFill"></div></div>
 </div>
 
 <!-- After #main: later drag regions win, so these buttons must come after it. -->
@@ -1822,6 +1945,8 @@
             el.wExp.innerHTML = ex ? I_COLL : I_EXP;
             // Skip on first layout: requestWindow already sized the window.
             if (v !== view) { if (view) resize(target(v)); view = v; }
+            if (panel === 'lyrics' || panel === 'settings' || v !== 'mobile') { body.scrollTop = 0; body.classList.remove('scrolled'); }
+            if (v === 'mobile' && moreFor !== currentTrackUri && curItem) loadMore(curItem);
             if (panel === 'queue') renderQueue();
             if (lyrOn()) { lyr.idx = -1; updateLyrics(lyrPos()); }
             lyricsLoop();
@@ -2238,6 +2363,8 @@ void main() {
             const on = heartUri === currentTrackUri && heartState;
             el.mHeart.classList.toggle('on', on);
             el.mHeart.innerHTML = on ? I_HEARTF : I_HEART;
+            el.mmHeart.classList.toggle('on', on);
+            el.mmHeart.innerHTML = on ? I_HEARTF : I_HEART;
             el.mHeart.title = el.mHeart.ariaLabel = on ? 'Remove from Liked Songs' : 'Save to Liked Songs';
         }
 
@@ -2276,6 +2403,8 @@ void main() {
 
         function showMeta(item) {
             const album = albumOf(item);
+            marquee(el.mmTW, el.mmT, titleOf(item) || 'Unknown');
+            el.mmS.textContent = artistsOf(item);
             marquee(el.ttlW, el.ttl, titleOf(item) || 'Unknown');
             marquee(el.subW, el.sub, [artistsOf(item), album].filter(Boolean).join(' — ') || '—');
             const small = imgOf(item, 'standard'), big = imgOf(item, 'xlarge');
@@ -2293,6 +2422,7 @@ void main() {
         async function loadTrack(item) {
             curItem = item;
             showMeta(item);
+            if (view === 'mobile') loadMore(item); else moreFor = null;
             refreshHeart(item.uri);
             // Only fetched while the expanded view is open.
             loadCanvas(withCanvas() ? item.uri : null);
@@ -2354,6 +2484,8 @@ void main() {
             if (pl !== playing) {
                 playing = pl;
                 el.playIco.innerHTML = pl ? I_PAUSE3 : I_PLAY3;
+                el.mmIco.innerHTML = pl ? I_PAUSE3 : I_PLAY3;
+                el.mmPlay.title = el.mmPlay.ariaLabel = pl ? 'Pause' : 'Play';
                 el.bPlay.title = el.bPlay.ariaLabel = pl ? 'Pause' : 'Play';
             }
             durMs = Number(s?.duration?.milliseconds) || msOf(item);
@@ -2394,7 +2526,10 @@ void main() {
 
         let tick = null, dragging = false;
 
-        const setFill = p => { el.fill.style.transform = `translateX(${((p - 1) * 100).toFixed(3)}%)`; };
+        const setFill = p => {
+            el.fill.style.transform = `translateX(${((p - 1) * 100).toFixed(3)}%)`;
+            el.mmFill.style.transform = `scaleX(${p.toFixed(4)})`;
+        };
 
         function syncProgress() {
             win.clearTimeout(tick);
@@ -2755,6 +2890,7 @@ void main() {
             }
             const kara = karaoke && currentLyrics.karaoke;
             el.lyrScroll.innerHTML = currentLyrics.lines.map(l => {
+                if (l.dots) return `<div class="lyric dots" data-t="${l.t}"><span class="dt"></span><span class="dt"></span><span class="dt"></span></div>`;
                 const words = kara && l.words;
                 const inner = words ? l.words.map(w => `<span class="w">${esc(w.text)}</span>`).join('') : esc(l.text);
                 const pron = l.pron ? `<div class="pron">${esc(l.pron)}</div>` : '';
@@ -2781,6 +2917,111 @@ void main() {
                 raf = null;
             }
         }
+
+        /* Artist and credits cards (phone view) */
+
+        const artistCache = new Map(), creditCache = new Map();
+        let moreFor = null, moreReq = 0;
+        const stripHtml = h => { const d = doc.createElement('div'); d.innerHTML = String(h || '').replace(/<br\s*\/?>/gi, '\n'); return d.textContent.trim(); };
+
+        async function artistInfo(uri) {
+            if (artistCache.has(uri)) return artistCache.get(uri);
+            const G = Spicetify.GraphQL;
+            let a = null;
+            try {
+                const def = G?.Definitions?.queryArtistOverview;
+                if (def) {
+                    const res = await G.Request(def, { uri, locale: Spicetify.Locale?.getLocale?.() || '', includePrerelease: false });
+                    const u = res?.data?.artistUnion;
+                    if (u?.profile?.name) {
+                        const pick = srcs => (srcs || []).slice().sort((x, y) => (y.width || 0) - (x.width || 0))[0]?.url;
+                        a = {
+                            uri, name: u.profile.name, verified: !!u.profile.verified,
+                            bio: stripHtml(u.profile.biography?.text),
+                            listeners: u.stats?.monthlyListeners ?? null,
+                            img: pick(u.visuals?.avatarImage?.sources) || pick(u.headerImage?.data?.sources) || '',
+                        };
+                    }
+                }
+            } catch {}
+            if (a || artistCache.size < 200) artistCache.set(uri, a);
+            return a;
+        }
+
+        async function credits(uri) {
+            if (creditCache.has(uri)) return creditCache.get(uri);
+            let list = null;
+            try {
+                const id = uri.split(':').pop();
+                const res = await cos(`https://spclient.wg.spotify.com/track-credits-view/v0/experimental/${id}/credits`);
+                const people = new Map();
+                for (const g of res?.roleCredits || []) for (const p of g.artists || []) {
+                    const k = p.uri || p.name;
+                    const e = people.get(k) || { name: p.name, uri: p.uri || null, roles: [] };
+                    const roles = p.subroles?.length ? p.subroles : [g.roleTitle];
+                    for (const ro of roles) if (ro && !e.roles.includes(ro)) e.roles.push(ro);
+                    people.set(k, e);
+                }
+                list = [...people.values()].slice(0, 8);
+            } catch {}
+            creditCache.set(uri, list);
+            return list;
+        }
+
+        const cap = t => String(t).replace(/^./, c => c.toUpperCase());
+        async function following(uris) {
+            try { return (await lib()?.contains?.(...uris)) || []; } catch { return []; }
+        }
+        async function loadMore(item) {
+            const token = ++moreReq, uri = item?.uri;
+            moreFor = uri;
+            el.mArtist.innerHTML = el.mCredits.innerHTML = '';
+            if (!uri?.startsWith('spotify:track:')) return;
+            const aUri = item.artists?.[0]?.uri;
+            const [a, cr] = await Promise.all([aUri ? artistInfo(aUri) : null, credits(uri)]);
+            if (token !== moreReq) return;
+            const follows = await following([a?.uri, ...(cr || []).map(c => c.uri)].filter(Boolean));
+            if (token !== moreReq) return;
+            const isF = u => !!follows[[a?.uri, ...(cr || []).map(c => c.uri)].filter(Boolean).indexOf(u)];
+            const folBtn = u => u ? `<button class="fol" data-fol="${esc(u)}" data-on="${isF(u) ? 1 : 0}">${isF(u) ? 'Following' : 'Follow'}</button>` : '';
+            if (a) el.mArtist.innerHTML = `
+                <div class="ahero" style="background-image:url('${esc(a.img).replace(/'/g, '%27')}')"><div class="clb">About the artist</div></div>
+                <div class="abody">
+                  <div class="arow"><div>
+                    <div class="aname"><span class="lnk" data-go="${esc(a.uri)}">${esc(a.name)}</span>${a.verified ? I_VERIFIED : ''}</div>
+                    ${a.listeners != null ? `<div class="ast">${Number(a.listeners).toLocaleString()} monthly listeners</div>` : ''}
+                  </div>${folBtn(a.uri)}</div>
+                  ${a.bio ? `<div class="abio">${esc(a.bio)}</div>` : ''}
+                </div>`;
+            if (cr?.length) el.mCredits.innerHTML = `<div class="clb">Credits</div>` + cr.map(c => `
+                <div class="crow"><div>
+                  <div class="cn${c.uri ? ' lnk' : ''}"${c.uri ? ` data-go="${esc(c.uri)}"` : ''}>${esc(c.name)}</div>
+                  <div class="cro">${c.roles.map(cap).map(esc).join(' • ')}</div>
+                </div>${folBtn(c.uri)}</div>`).join('');
+        }
+        el.mmore.addEventListener('click', async e => {
+            const go = e.target.closest('[data-go]');
+            if (go) { goTo(go.dataset.go); return; }
+            const bio = e.target.closest('.abio');
+            if (bio) { bio.classList.toggle('open'); return; }
+            const f = e.target.closest('[data-fol]');
+            if (!f) return;
+            const u = f.dataset.fol, on = f.dataset.on !== '1';
+            try { await (on ? lib().add({ uris: [u] }) : lib().remove({ uris: [u] })); } catch { toast('Couldn’t change following'); return; }
+            for (const b of el.mmore.querySelectorAll(`[data-fol="${CSS.escape(u)}"]`)) { b.dataset.on = on ? 1 : 0; b.textContent = on ? 'Following' : 'Follow'; }
+        });
+
+        // Mini header once the controls scroll out of sight.
+        body.addEventListener('scroll', () => {
+            const past = view === 'mobile' && body.scrollTop > el.bottom.offsetTop + el.bottom.offsetHeight - 40;
+            if (past !== body.classList.contains('scrolled')) {
+                body.classList.toggle('scrolled', past);
+                if (past) marquee(el.mmTW, el.mmT);
+            }
+        }, { passive: true });
+        el.mmGo.onclick    = () => body.scrollTo({ top: 0, behavior: 'smooth' });
+        el.mmPlay.onclick  = () => sp.togglePlay();
+        el.mmHeart.onclick = toggleHeart;
 
         /* Lyrics font */
 
@@ -2866,7 +3107,7 @@ void main() {
 
         // The single line shown over the Canvas.
         function setLine(line) {
-            el.mLine.className = line?.classList.contains('kara') ? 'kara' : '';
+            el.mLine.className = line?.classList.contains('kara') ? 'kara' : line?.classList.contains('dots') ? 'dots' : '';
             el.mLine.innerHTML = line ? `<span class="in">${line.innerHTML}</span>` : '';
         }
 
@@ -2909,6 +3150,14 @@ void main() {
                         line.classList.toggle('past', i < ai);
                     }
                 }
+            }
+
+            // A pause: the three dots fill in as the next line comes.
+            if (lines[ai]?.dots) {
+                const p = clamp01((pos - lines[ai].t) / (lines[ai].d || 1)).toFixed(3);
+                lyr.active?.style.setProperty('--p', p);
+                el.mLine.style.setProperty('--p', p);
+                return;
             }
 
             // Word-by-word fill.
@@ -3064,7 +3313,7 @@ void main() {
 
         // Scroll to change the volume, 5% per notch.
         doc.addEventListener('wheel', e => {
-            if (!e.deltaY || e.target.closest?.('#panel, .pop')) return;
+            if (!e.deltaY || view === 'mobile' || e.target.closest?.('#panel, .pop')) return;
             e.preventDefault();
             const v = Math.max(0, Math.min(100, Math.round((+el.vol.value + (e.deltaY < 0 ? 5 : -5)) / 5) * 5));
             showVol(v);
