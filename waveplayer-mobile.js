@@ -1809,7 +1809,8 @@
        With the cover the free space goes above it; with a Canvas the line over the video
        grows instead. */
     html body.v-mobile.nocard:not(.p):not(.pl):not(.ps) #panel{margin-top:8px;}
-    body.v-mobile.nocard:not(.canvas):not(.p) #artBox{margin-top:auto;}
+    /* The cover sits in the middle of the space between the header and the player below. */
+    html body.v-mobile.nocard:not(.canvas):not(.p):not(.pl):not(.ps) #artBox{margin-top:auto;margin-bottom:auto;}
     /* With a Canvas, the line over the video moves down so the controls meet the folded card,
        and the fade follows it (same --fy idea as above). */
     html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #mLine{height:auto;flex:1;min-height:60px;}
