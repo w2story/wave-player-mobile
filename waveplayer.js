@@ -813,6 +813,8 @@
     const I_DOWN   = svg('<path d="m6 9.5 6 6 6-6"/>', 'st');
     const I_HEART  = svg('<circle cx="12" cy="12" r="8.6"/><path d="M12 8v8M8 12h8"/>', 'st');
     const I_HEARTF = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="#1ed760"/><path d="m7.6 12.3 3 3 5.8-6.2" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+    const I_TIMER  = svg('<circle cx="12" cy="13.5" r="7.2"/><path d="M12 13.5V9.6M9.6 3.5h4.8"/>', 'st');
+    const I_EQ     = '<svg viewBox="0 0 16 16" class="eq"><rect x="1.5" y="7" width="2.6" height="7"/><rect x="6.7" y="3" width="2.6" height="11"/><rect x="11.9" y="5.5" width="2.6" height="8.5"/></svg>';
     const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
 
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
@@ -1249,11 +1251,11 @@
     /* With a Canvas: the video fills the window, the current line sits over it,
        and the cover shrinks to a thumbnail beside the titles (like Spotify's phone app). */
     #mLine{display:none;}
-    body.v-mobile.canvas:not(.p) #xbg{display:block;}
+    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{display:block;}
     body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur{display:none;}
     body.v-mobile #mbg{z-index:0;}
-    body.v-mobile.canvas:not(.p) #mbg{background:#121212;}
-    body.v-mobile.canvas:not(.p) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
+    body.v-mobile.canvas:not(.pl):not(.ps) #mbg{background:var(--cvbg,var(--mtop,#121212));transition:background-color 1.2s ease;}
+    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
     body.v-mobile.canvas #xVid{height:var(--vh);
         -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);
         mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);}
@@ -1261,7 +1263,7 @@
     body.v-mobile.canvas #xShade{display:block;background:linear-gradient(180deg,rgba(0,0,0,.55) 0,transparent 110px,
         transparent 38%,rgba(0,0,0,.35) 70%,rgba(0,0,0,0) 100%);}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
-    body.v-mobile.canvas:not(.p) #mLine{display:flex;flex:none;
+    body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
         height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-weight:700;line-height:1.3;letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
@@ -1269,17 +1271,62 @@
     #mLine.kara .w{background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.5) var(--p,0%) 100%);
         -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
     #mLine.kara .w.done{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}
-    body.v-mobile.canvas:not(.p) #top{flex-direction:row;align-items:center;gap:14px;padding-top:0;}
-    body.v-mobile.canvas:not(.p) #artBox{width:52px;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.35);}
-    body.v-mobile.canvas:not(.p) #meta{margin:0;flex:1;}
-    body.v-mobile.canvas:not(.p) .ttl{font-size:22px;line-height:28px;}
-    body.v-mobile.canvas:not(.p) #panel{flex:1;min-height:180px;}
+    body.v-mobile.canvas:not(.pl):not(.ps) #top{flex-direction:row;align-items:center;gap:14px;padding-top:0;}
+    body.v-mobile.canvas:not(.pl):not(.ps) #artBox{width:52px;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+    body.v-mobile.canvas:not(.pl):not(.ps) #meta{margin:0;flex:1;}
+    body.v-mobile.canvas:not(.pl):not(.ps) .ttl{font-size:22px;line-height:28px;}
+    body.v-mobile.canvas:not(.pl):not(.ps) #panel{flex:1;min-height:180px;}
     @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
 
-    /* Up Next and Settings take the whole window; the header closes them. */
-    body.v-mobile.p:not(.pl) #top,body.v-mobile.p:not(.pl) #bottom{display:none;}
-    body.v-mobile .qhead .qtitle,body.v-mobile .shd .qtitle{visibility:hidden;}
-    body.v-mobile.p:not(.pl) #panel{background:transparent;border-radius:0;margin:0 -20px;min-height:0;}
+    /* Settings take the whole window; the header closes them. */
+    body.v-mobile .shd .qtitle{visibility:hidden;}
+    body.v-mobile.ps #top,body.v-mobile.ps #bottom{display:none;}
+
+    /* Queue: a sheet over the dimmed, blurred Now Playing screen. */
+    #qFrom,#qNow,#qBar,#mScrim{display:none;}
+    body.v-mobile.pq #mScrim{display:block;position:fixed;inset:0;z-index:4;background:rgba(0,0,0,.4);
+        -webkit-backdrop-filter:blur(10px) saturate(.85);backdrop-filter:blur(10px) saturate(.85);animation:fadeIn .25s ease;}
+    body.v-mobile.pq #panel{position:fixed;left:10px;right:10px;bottom:0;height:min(80vh,calc(100vh - 110px));z-index:5;
+        margin:0;padding-top:20px;min-height:0;border-radius:30px 30px 0 0;background:rgba(40,40,44,.9);
+        -webkit-backdrop-filter:blur(30px) saturate(1.4);backdrop-filter:blur(30px) saturate(1.4);
+        box-shadow:0 -12px 40px rgba(0,0,0,.45),inset 0 .5px 0 rgba(255,255,255,.14);
+        animation:sheetUp .34s cubic-bezier(.2,.9,.3,1);}
+    body.v-mobile.pq #panel::before{content:'';position:absolute;top:9px;left:50%;width:38px;height:5px;margin-left:-19px;
+        border-radius:3px;background:rgba(255,255,255,.28);}
+    @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @media (prefers-reduced-motion:reduce){body.v-mobile.pq #panel,body.v-mobile.pq #mScrim{animation:none}}
+    body.v-mobile.pq .qhead{padding:6px 20px 0;}
+    body.v-mobile.pq .qhead .qtitle{font-size:22px;font-weight:800;letter-spacing:-.02em;}
+    body.v-mobile.pq .qbtns{display:none;}
+    body.v-mobile.pq #qFrom{display:block;padding:4px 20px 12px;font-size:13px;color:rgba(255,255,255,.7);
+        white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    #qFrom b{color:#fff;font-weight:600;}
+    body.v-mobile.pq #qNow{display:flex;align-items:center;gap:12px;padding:4px 20px 6px;}
+    #qNow img{width:50px;height:50px;border-radius:4px;object-fit:cover;flex:none;background:rgba(255,255,255,.08);}
+    #qNow .qn{color:#1ed760;font-size:15.5px;font-weight:600;display:flex;align-items:center;gap:6px;}
+    #qNow .eq{width:13px;height:13px;flex:none;fill:#1ed760;}
+    #qNow .qa{font-size:13.5px;}
+    #qNow .qp{width:40px;height:40px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;flex:none;}
+    #qNow .qp svg{width:18px;height:18px;}
+    body.v-mobile.pq .qs{padding:14px 20px 6px;font-size:13px;font-weight:500;color:rgba(255,255,255,.68);}
+    body.v-mobile.pq .qi{padding:7px 20px;gap:12px;}
+    body.v-mobile.pq .qi img{width:50px;height:50px;}
+    body.v-mobile.pq .qn{font-size:15.5px;}
+    body.v-mobile.pq .qa{font-size:13.5px;margin-top:2px;}
+    body.v-mobile.pq .qd{display:none;}
+    body.v-mobile.pq .qi::after{content:'';width:18px;height:10px;flex:none;opacity:.45;
+        background:linear-gradient(#fff,#fff) 0 0/100% 1.6px no-repeat,linear-gradient(#fff,#fff) 0 50%/100% 1.6px no-repeat,
+                   linear-gradient(#fff,#fff) 0 100%/100% 1.6px no-repeat;}
+    body.v-mobile.pq #qList{padding-bottom:6px;}
+    body.v-mobile.pq #qBar{display:flex;gap:8px;padding:10px 14px 16px;flex:none;}
+    #qBar button{position:relative;flex:1;height:62px;border-radius:12px;background:rgba(255,255,255,.08);display:flex;
+        flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12px;color:rgba(255,255,255,.9);}
+    #qBar button:hover{background:rgba(255,255,255,.13);}
+    #qBar svg{width:20px;height:20px;}
+    #qBar .on{color:#1ed760;}
+    #qBar .off{opacity:.35;}
+    body.v-mobile.ps #panel{background:transparent;border-radius:0;margin:0 -20px;min-height:0;}
     `;
 
     /* Markup: one set of elements for every view; body classes rearrange them. */
@@ -1332,7 +1379,14 @@
           <button class="qb" id="qShuf" title="Shuffle" aria-label="Shuffle">${I_SHUFFLE}<span class="bdg">✦</span></button>
           <button class="qb" id="qRep" title="Repeat" aria-label="Repeat">${I_REPEAT}<span class="bdg">1</span></button>
         </div></div>
+      <div id="qFrom"></div>
+      <div id="qNow"></div>
       <div id="qList"></div>
+      <div id="qBar">
+        <button id="qbShuf">${I_SHUFFLE}<span>Shuffle</span></button>
+        <button id="qbRep">${I_REPEAT}<span>Repeat</span></button>
+        <button id="qbTimer">${I_TIMER}<span>Timer</span></button>
+      </div>
     </div>
     <div class="pv" id="pvSettings">
       <div class="shd"><span class="qtitle">Settings</span><button class="sdone" id="sDone">Done</button></div>
@@ -1414,6 +1468,7 @@
       </div>
     </div>
   </div>
+  <div id="mScrim" class="nd"></div>
 </div>
 
 <!-- After #main: later drag regions win, so these buttons must come after it. -->
@@ -1508,7 +1563,7 @@
         let view  = null;   // compact | expanded | panel | full
         let panel = null;   // null | lyrics | queue | settings
         // Lyrics are on screen: the lyrics panel, or the card in the mobile view.
-        const lyrOn = () => panel === 'lyrics' || (view === 'mobile' && !panel);
+        const lyrOn = () => panel === 'lyrics' || (view === 'mobile' && (!panel || panel === 'queue'));
 
         let playing = false, durMs = 0, shuffle = 0, repeat = 0, curItem = null, limits = null;
 
@@ -1603,6 +1658,8 @@
             body.classList.add(`v-${v}`);
             body.classList.toggle('p', !!panel);
             body.classList.toggle('pl', panel === 'lyrics');
+            body.classList.toggle('pq', panel === 'queue');
+            body.classList.toggle('ps', panel === 'settings');
             el.pvLyrics.classList.toggle('show', panel === 'lyrics' || (v === 'mobile' && !panel));
             paintTitle();
             el.pvQueue.classList.toggle('show', panel === 'queue');
@@ -1629,9 +1686,10 @@
 
         let ctxName = '';
         function paintTitle() {
-            el.mTitle.textContent = panel === 'queue' ? 'Playing Next' : panel === 'settings' ? 'Settings'
-                : panel === 'lyrics' ? 'Lyrics' : ctxName || 'Now Playing';
-            el.mTitle.style.textTransform = !panel && ctxName ? 'none' : '';
+            const home = !panel || panel === 'queue';
+            el.mTitle.textContent = panel === 'settings' ? 'Settings' : panel === 'lyrics' ? 'Lyrics' : ctxName || 'Now Playing';
+            el.mTitle.style.textTransform = home && ctxName ? 'none' : '';
+            el.qFrom.innerHTML = ctxName ? `Playing from <b>${esc(ctxName)}</b>` : '';
         }
 
         const setMode = m => {
@@ -1642,7 +1700,7 @@
         };
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
-        const withCanvas = () => view === 'expanded' || view === 'full' || (view === 'mobile' && !panel);
+        const withCanvas = () => view === 'expanded' || view === 'full' || (view === 'mobile' && (!panel || panel === 'queue'));
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -1931,6 +1989,7 @@ void main() {
             const token = ++canvasReq;
             canvasFor = uri;
             body.classList.remove('canvas');
+            doc.documentElement.style.removeProperty('--cvbg');
             el.xVid.pause();
             el.xVid.removeAttribute('src');
             el.xVid.load();
@@ -1954,7 +2013,31 @@ void main() {
             if (withCanvas() && !hidden()) el.xVid.play().catch(() => {});
             else el.xVid.pause();
         }
-        el.xVid.addEventListener('playing', () => body.classList.add('canvas'));
+        el.xVid.addEventListener('playing', () => { body.classList.add('canvas'); sampleCanvas(); });
+        // Sample the bottom of the Canvas so the space under it continues in its colour.
+        let sampledAt = -9;
+        function sampleCanvas() {
+            const v = el.xVid;
+            if (view !== 'mobile' || !v.videoWidth) return;
+            sampledAt = v.currentTime;
+            try {
+                const c = doc.createElement('canvas');
+                c.width = 24; c.height = 4;
+                const x = c.getContext('2d', { willReadFrequently: true });
+                x.drawImage(v, 0, v.videoHeight * .88, v.videoWidth, v.videoHeight * .12, 0, 0, 24, 4);
+                const d = x.getImageData(0, 0, 24, 4).data;
+                let r = 0, g = 0, b = 0;
+                for (let i = 0; i < d.length; i += 4) { r += d[i]; g += d[i + 1]; b += d[i + 2]; }
+                const n = d.length / 4;
+                let q = { r: r / n, g: g / n, b: b / n };
+                // Dark enough for white text and the lyrics card on top.
+                const l = (0.2126 * q.r + 0.7152 * q.g + 0.0722 * q.b) / 255;
+                if (l > 0.2) q = shade(q, 0.2 / l - 1);
+                doc.documentElement.style.setProperty('--cvbg', `rgb(${Math.round(q.r)},${Math.round(q.g)},${Math.round(q.b)})`);
+            } catch {}
+        }
+        // Follow the video as it changes, every second and a half at most.
+        el.xVid.addEventListener('timeupdate', () => { if (Math.abs(el.xVid.currentTime - sampledAt) > 1.5) sampleCanvas(); });
         // Stitched WebM has no duration, so loop by hand.
         el.xVid.addEventListener('ended', () => { el.xVid.currentTime = 0; canvasPlay(); });
         el.xVid.addEventListener('error', () => body.classList.remove('canvas'));
@@ -2113,6 +2196,7 @@ void main() {
             const cn = s?.context?.metadata?.context_description || sp.data?.context?.metadata?.context_description || '';
             if (cn !== ctxName) { ctxName = cn; paintTitle(); }
             paintModes();
+            if (panel === 'queue') { paintQNow(); paintQBar(); }
             syncProgress();
             if (lyrOn()) updateLyrics(lyrPos());
             lyricsLoop();
@@ -2347,16 +2431,16 @@ void main() {
             try {
                 await P.PlayerAPI.setSleepTimer(v);
                 toast(v ? `Sleep timer: ${label.toLowerCase()}` : 'Sleep timer off');
+                win.setTimeout(paintQBar, 300);
             } catch { toast('Couldn’t set the sleep timer'); }
         }
-        function openSleep() {
+        function openSleep(anchor = dotsEl()) {
             const on = (P?.PlayerAPI?.getState?.()?.sleepTimer?.type || 0) !== 0;
             renderMenu([
-                { t: '‹ Back', sub: true, f: openMenu },
-                '-',
+                ...(anchor === el.qbTimer ? [] : [{ t: '‹ Back', sub: true, f: openMenu }, '-']),
                 ...SLEEP.map(([t, v]) => ({ t, f: () => setSleep(v, t) })),
                 ...(on ? ['-', { t: 'Turn off', f: () => setSleep(0) }] : []),
-            ], dotsEl());
+            ], anchor);
         }
 
         const dotsEl = () => view === 'mobile' ? el.mDots : el.bDots;
@@ -2409,7 +2493,31 @@ void main() {
 
         let qItems = { q: [], n: [] };
 
+        function paintQNow() {
+            if (view !== 'mobile' || !curItem) return;
+            el.qNow.innerHTML = `<img src="${esc(imgOf(curItem, 'small'))}" alt="" draggable="false">
+                <div class="qt"><div class="qn">${playing ? I_EQ : ''}<span>${esc(titleOf(curItem) || 'Unknown')}</span></div>
+                <div class="qa">${esc(artistsOf(curItem))}</div></div>
+                <button class="qp" title="${playing ? 'Pause' : 'Play'}" aria-label="${playing ? 'Pause' : 'Play'}"><svg viewBox="0 0 24 24">${playing ? I_PAUSE3 : I_PLAY3}</svg></button>`;
+        }
+        el.qNow.onclick = e => { if (e.target.closest('.qp')) sp.togglePlay(); };
+        function paintQBar() {
+            el.qbShuf.className = el.qShuf.classList.contains('off') ? 'off' : shuffle ? 'on' : '';
+            el.qbShuf.lastChild.textContent = shuffle === 2 ? 'Smart' : 'Shuffle';
+            el.qbRep.className = el.qRep.classList.contains('off') ? 'off' : repeat ? 'on' : '';
+            el.qbRep.lastChild.textContent = repeat === 2 ? 'Repeat one' : 'Repeat';
+            const t = P?.PlayerAPI?.getState?.()?.sleepTimer;
+            el.qbTimer.className = (t?.type || 0) !== 0 ? 'on' : '';
+            el.qbTimer.style.display = hasSleep() ? '' : 'none';
+        }
+        el.qbShuf.onclick  = () => el.qShuf.onclick();
+        el.qbRep.onclick   = () => el.qRep.onclick();
+        el.qbTimer.onclick = () => openSleep(el.qbTimer);
+        el.mScrim.onclick  = () => { panel = null; layout(); };
+
         async function renderQueue() {
+            paintQNow();
+            paintQBar();
             let q = null;
             try { q = await P.PlayerAPI.getQueue(); } catch {}
             if (panel !== 'queue') return;
