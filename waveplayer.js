@@ -1169,7 +1169,7 @@
     #lyrScroll{position:relative;}
     #mbg,#mhead,#mHeart,#mlh,.ms{display:none;}
     #mbg{position:fixed;inset:0;z-index:1;
-        background:linear-gradient(180deg,var(--mtop,#3b3b44) 0,#121212 82%);}
+        background:linear-gradient(180deg,var(--mtop,#3b3b44) 0,var(--mbot,#121212) 100%);}
     body.v-mobile #mbg{display:block;}
     body.v-mobile.pl #mbg{background:var(--lyrbg,#5b5b68);}
     body.v-mobile #bg,body.v-mobile #grain,body.v-mobile #wc,body.v-mobile #bDots,body.v-mobile #mini{display:none;}
@@ -1184,7 +1184,7 @@
     #mhead .wb svg{width:20px;height:20px;}
 
     body.v-mobile #top{order:1;display:flex;flex-direction:column;align-items:stretch;gap:0;padding-top:4px;}
-    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - 520px)));height:auto;aspect-ratio:1;align-self:center;
+    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - 620px)));height:auto;aspect-ratio:1;align-self:center;
         border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.45);}
     body.v-mobile #meta{margin:20px 0 0;padding-right:44px;text-align:left;}
     body.v-mobile .ttl{font-size:21px;line-height:28px;font-weight:700;}
@@ -1247,6 +1247,16 @@
     body.v-mobile.pl .grp.l,body.v-mobile.pl .grp.r,body.v-mobile.pl .ms{display:none;}
     body.v-mobile.pl .grp.c{justify-content:center;gap:34px;height:62px;}
     body.v-mobile.pl #bPlay{width:54px;height:54px;}
+
+    /* With the cover: cover, current line, then titles, as on the phone. */
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #top{display:contents;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #artBox{order:1;margin-top:8px;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #mLine{display:flex;order:2;flex:none;min-height:84px;align-items:center;
+        padding:14px 4px;font-size:calc(var(--lsz,24px) * .78);font-weight:700;line-height:1.3;color:#fff;white-space:pre-wrap;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #meta{order:3;margin:0;flex:none;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) .ttl{font-size:23px;line-height:30px;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #bottom{order:4;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #panel{order:5;}
 
     /* With a Canvas: the video fills the window, the current line sits over it,
        and the cover shrinks to a thumbnail beside the titles (like Spotify's phone app). */
@@ -2055,8 +2065,12 @@ void main() {
                 const base = d;
                 const lum = q => (0.2126*q.r + 0.7152*q.g + 0.0722*q.b) / 255;
                 const toLum = (q, L) => { const l = lum(q); return l > L ? shade(q, L / l - 1) : shade(q, (L - l) / (1 - l)); };
-                const mt = toLum(base, 0.16), lb = toLum(base, 0.27);
+                // Push away from grey a little, as Spotify's colours are livelier than the raw average.
+                const vivid = (q, k) => { const g = lum(q) * 255;
+                    return { r: clampC(g + (q.r - g) * k), g: clampC(g + (q.g - g) * k), b: clampC(g + (q.b - g) * k) }; };
+                const mt = toLum(vivid(base, 1.3), 0.17), mb = toLum(vivid(base, 1.2), 0.065), lb = toLum(vivid(base, 1.4), 0.27);
                 root.setProperty('--mtop', `rgb(${mt.r},${mt.g},${mt.b})`);
+                root.setProperty('--mbot', `rgb(${mb.r},${mb.g},${mb.b})`);
                 root.setProperty('--lyrbg', `rgb(${lb.r},${lb.g},${lb.b})`);
                 // Shown until the swirl draws.
                 body.style.background = `rgb(${Math.round(d.r*.3)},${Math.round(d.g*.3)},${Math.round(d.b*.3)})`;
