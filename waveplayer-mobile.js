@@ -135,13 +135,17 @@
     };
 
     // Lyric sources in default order.
-    const PROVIDERS = ['lyricsplus', 'spotify', 'lrclib', 'netease', 'musixmatch'];
+    // Spotify first: its lines match Spotify's playback best. Word-timed lyrics still win when
+    // word-by-word sync is on (see pickLyrics), so LyricsPlus/NetEase supply those.
+    const PROVIDERS = ['spotify', 'lrclib', 'lyricsplus', 'netease', 'musixmatch'];
 
     // Saved order, with unknown names dropped and new sources appended.
     const provOrder = (() => {
+        // One-time reset to the new default order; after that the saved order is kept.
+        if (localStorage.getItem('wp7-prov-v') !== '2') {
+            try { localStorage.setItem('wp7-prov', PROVIDERS.join(',')); localStorage.setItem('wp7-prov-v', '2'); } catch {}
+        }
         const saved = (localStorage.getItem('wp7-prov') || '').split(',').filter(p => PROVIDERS.includes(p));
-        // LyricsPlus (syllable lyrics) goes to the top of an order saved before it existed.
-        if (saved.length && !saved.includes('lyricsplus')) saved.unshift('lyricsplus');
         return [...saved, ...PROVIDERS.filter(p => !saved.includes(p))];
     })();
     const provOff  = new Set((localStorage.getItem('wp7-prov-off') || '').split(',').filter(Boolean));
