@@ -186,7 +186,7 @@
         'Play': '재생', 'Pause': '일시정지', 'Previous': '이전', 'Next': '다음', 'Volume': '볼륨', 'Mute': '음소거',
         'More': '더 보기', 'More options': '더 보기', 'Lyrics': '가사', 'Lyrics preview': '가사 미리 보기', 'Full lyrics': '가사 전체 보기',
         'Playing Next': '재생목록', 'Close player': '플레이어 닫기', 'Expand': '크게 보기', 'Back to mini player': '미니 플레이어로',
-        'Back': '뒤로', 'Phone view': '모바일 화면', 'Settings': '설정', 'Done': '완료', 'Reset': '초기화',
+        'Back': '뒤로', 'Cover view': '커버 화면', 'Phone view': '모바일 화면', 'Settings': '설정', 'Done': '완료', 'Reset': '초기화',
         'Shuffle': '셔플', 'Shuffle on': '셔플 켜짐', 'Smart shuffle': '스마트 셔플', 'Smart': '스마트',
         'Repeat': '반복하기', 'Repeat all': '전체 반복', 'Repeat one': '한 곡 반복', 'Timer': '타이머',
         'Not available during autoplay': '자동 재생 중에는 사용할 수 없습니다', 'Not available for this music': '이 음악에서는 사용할 수 없습니다',
@@ -1906,7 +1906,7 @@
 
 <div id="main">
   <div id="mhead">
-    <button class="wb" id="mBack" title="Back" aria-label="Back">${I_DOWN}</button>
+    <button class="wb" id="mBack" title="Cover view" aria-label="Cover view">${I_DOWN}</button>
     <div class="mt" id="mTitle">Now Playing</div>
     <button class="wb aa" id="mFontH" title="Lyrics font" aria-label="Lyrics font">Aa</button>
     <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
@@ -3814,7 +3814,8 @@ void main() {
         el.mini.onclick = () => setMode('compact');
         // Mobile view
         el.wMob.onclick   = () => setMode('mobile');
-        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('compact'); };
+        // Down from the phone view goes to the cover view (artwork filling the window).
+        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('expanded'); };
         el.mDots.onclick  = openMenu;
         el.mClose.onclick = closePlayer;
         el.mlh.onclick    = () => togglePanel('lyrics');
@@ -3833,7 +3834,7 @@ void main() {
                 case 'ArrowUp':   e.preventDefault(); commitVol(Math.min(100, Math.round((sp.getVolume() || 0) * 100) + 5)); break;
                 case 'ArrowDown': e.preventDefault(); commitVol(Math.max(0, Math.round((sp.getVolume() || 0) * 100) - 5)); break;
                 case 'l': case 'L': togglePanel('lyrics'); break;
-                case 'm': case 'M': if (!framed) setMode(mode === 'mobile' ? 'compact' : 'mobile'); break;
+                case 'm': case 'M': if (!framed) setMode(mode === 'mobile' ? 'expanded' : 'mobile'); break;
                 case 'q': case 'Q': if (!full) togglePanel('queue'); break;
                 case '[': if (lyrOn()) nudge(-250); break;
                 case ']': if (lyrOn()) nudge(250); break;
