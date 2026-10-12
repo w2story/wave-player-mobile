@@ -1250,10 +1250,19 @@
        and the cover shrinks to a thumbnail beside the titles (like Spotify's phone app). */
     #mLine{display:none;}
     body.v-mobile.canvas:not(.p) #xbg{display:block;}
-    body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur,body.v-mobile.canvas #xShade{display:none;}
-    body.v-mobile.canvas:not(.p) #mbg{background:linear-gradient(180deg,rgba(0,0,0,.6) 0,transparent 96px,transparent 42%,
-        rgba(0,0,0,.55) calc(100% - 340px),#121212 calc(100% - 236px));}
-    body.v-mobile.canvas:not(.p) #mLine{display:flex;flex:1;min-height:60px;align-items:flex-end;padding:0 4px 22px;
+    body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur{display:none;}
+    body.v-mobile #mbg{z-index:0;}
+    body.v-mobile.canvas:not(.p) #mbg{background:#121212;}
+    body.v-mobile.canvas:not(.p) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
+    body.v-mobile.canvas #xVid{height:var(--vh);
+        -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);
+        mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);}
+    /* Darkened under the header, and gently behind the titles and controls. */
+    body.v-mobile.canvas #xShade{display:block;background:linear-gradient(180deg,rgba(0,0,0,.55) 0,transparent 110px,
+        transparent 38%,rgba(0,0,0,.35) 70%,rgba(0,0,0,0) 100%);}
+    /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
+    body.v-mobile.canvas:not(.p) #mLine{display:flex;flex:none;
+        height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-weight:700;line-height:1.3;letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
@@ -1264,7 +1273,7 @@
     body.v-mobile.canvas:not(.p) #artBox{width:52px;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.35);}
     body.v-mobile.canvas:not(.p) #meta{margin:0;flex:1;}
     body.v-mobile.canvas:not(.p) .ttl{font-size:22px;line-height:28px;}
-    body.v-mobile.canvas:not(.p) #panel{flex:0 0 210px;min-height:0;}
+    body.v-mobile.canvas:not(.p) #panel{flex:1;min-height:180px;}
     @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
 
     /* Up Next and Settings take the whole window; the header closes them. */
@@ -1443,7 +1452,7 @@
             await new Promise(r => setTimeout(r, 60));
         }
         try {
-            const sz = SZ[mode] || SZ.compact;
+            const sz = mode === 'mobile' ? { w: SZ.mobile.w, h: window.screen.availHeight } : (SZ[mode] || SZ.compact);
             // Ignore the size Chrome remembers from the last PiP window.
             pipWindow = await window.documentPictureInPicture.requestWindow({
                 width: sz.w, height: sz.h, preferInitialWindowPlacement: true,
@@ -1554,6 +1563,10 @@
         let want = null, sizeTimer = null, sizingUntil = 0, saveTimer = null, burst = 0;
         const openedAt = win.performance.now();
         const SIZE_CHECKS = [0, 120, 250, 450, 750, 1200, 2000];
+        // The mobile view is as tall as the screen allows; only its width is remembered.
+        const target = v => v === 'mobile'
+            ? { w: SZ.mobile.w, h: Math.max(SZ_MIN.mobile.h, win.screen.availHeight - Math.max(0, win.outerHeight - win.innerHeight)) }
+            : SZ[v];
         function resize(sz) {
             if (full) return;
             want = sz;
@@ -1575,7 +1588,7 @@
             const right = (sc.availLeft || 0) + sc.availWidth, bottom = (sc.availTop || 0) + sc.availHeight;
             const dx = Math.min(0, right - (win.screenX + win.outerWidth));
             const dy = Math.min(0, bottom - (win.screenY + win.outerHeight));
-            if ((dx || dy) && win.outerWidth < sc.availWidth && win.outerHeight < sc.availHeight) {
+            if ((dx || dy) && win.outerWidth <= sc.availWidth && win.outerHeight <= sc.availHeight) {
                 try { win.moveBy(dx, dy); } catch {}
             }
         }
@@ -1601,7 +1614,7 @@
             el.wExp.title = el.wExp.ariaLabel = ex ? 'Back to mini player' : 'Expand';
             el.wExp.innerHTML = ex ? I_COLL : I_EXP;
             // Skip on first layout: requestWindow already sized the window.
-            if (v !== view) { if (view) resize(SZ[v]); view = v; }
+            if (v !== view) { if (view) resize(target(v)); view = v; }
             if (panel === 'queue') renderQueue();
             if (lyrOn()) { lyr.idx = -1; updateLyrics(lyrPos()); }
             lyricsLoop();
@@ -2545,7 +2558,7 @@ void main() {
         el.sizeReset.onclick = () => {
             for (const k of Object.keys(SZ)) SZ[k] = { ...SZ_DEFAULT[k] };
             localStorage.removeItem('wp7-size');
-            resize(SZ[view]);
+            resize(target(view));
             toast('Window sizes reset');
         };
 
@@ -2725,7 +2738,7 @@ void main() {
                             const min = SZ_MIN[view];
                             SZ[view] = { w: Math.max(min.w, win.innerWidth), h: Math.max(min.h, win.innerHeight) };
                             localStorage.setItem('wp7-size', JSON.stringify(SZ));
-                        } else if (win.innerWidth !== SZ[view].w || win.innerHeight !== SZ[view].h) resize(SZ[view]);
+                        } else if (win.innerWidth !== target(view).w || win.innerHeight !== target(view).h) resize(target(view));
                         burst = 0;
                     }, 400);
                 }
@@ -2816,7 +2829,7 @@ void main() {
         sync();
 
         // requestWindow sometimes opens slightly too big.
-        win.setTimeout(() => resize(SZ[view]), 150);
+        win.setTimeout(() => resize(target(view)), 150);
         return cleanup;
     }
 
