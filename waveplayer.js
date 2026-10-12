@@ -517,12 +517,14 @@
     // Hits are kept; misses expire after a minute (often just a network blip).
     const MISS_TTL = 60e3;
 
-    // First synced result wins; unsynced text is kept as a fallback.
+    // First word-synced result wins (with word-by-word sync on); otherwise the first
+    // line-synced one; unsynced text is kept as a last fallback. Spotify's own lyrics
+    // are line-synced only, so later sources are tried for word timings.
     async function fetchLyrics(track) {
         const hit = lyricCache.get(track.uri);
         if (hit && (hit.result || Date.now() - hit.at < MISS_TTL)) return hit.result;
 
-        let fallback = null;
+        let fallback = null, lineSynced = null;
         for (const name of provOrder) {
             if (provOff.has(name)) continue;
             let r = null;
@@ -531,11 +533,13 @@
 
             fillGaps(r.lines);
             r.karaoke = r.lines.some(l => l.words);
-            if (r.synced) { remember(track.uri, r); return r; }
-            fallback = fallback || r;
+            if (r.synced && (!karaoke || r.karaoke)) { remember(track.uri, r); return r; }
+            if (r.synced) lineSynced = lineSynced || r;
+            else fallback = fallback || r;
         }
-        remember(track.uri, fallback);
-        return fallback;
+        const best = lineSynced || fallback;
+        remember(track.uri, best);
+        return best;
     }
 
     function remember(uri, result) {
@@ -576,8 +580,8 @@
     // Mobile view
     const I_PHONE  = svg('<rect x="7" y="3" width="10" height="18" rx="2.4"/><path d="M10.6 17.8h2.8"/>', 'st');
     const I_DOWN   = svg('<path d="m6 9.5 6 6 6-6"/>', 'st');
-    const I_HEART  = svg('<path d="M12 19.6s-7.6-4.6-7.6-10A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.6 2.5c0 5.4-7.6 10-7.6 10z"/>', 'st');
-    const I_HEARTF = svg('<path d="M12 20.2s-8.2-4.9-8.2-10.7A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 8.2 2.9c0 5.8-8.2 10.7-8.2 10.7z"/>');
+    const I_HEART  = svg('<circle cx="12" cy="12" r="8.6"/><path d="M12 8v8M8 12h8"/>', 'st');
+    const I_HEARTF = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="#1ed760"/><path d="m7.6 12.3 3 3 5.8-6.2" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
 
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
@@ -1006,6 +1010,27 @@
     body.v-mobile.pl .grp.c{justify-content:center;gap:34px;height:62px;}
     body.v-mobile.pl #bPlay{width:54px;height:54px;}
 
+    /* With a Canvas: the video fills the window, the current line sits over it,
+       and the cover shrinks to a thumbnail beside the titles (like Spotify's phone app). */
+    #mLine{display:none;}
+    body.v-mobile.canvas:not(.p) #xbg{display:block;}
+    body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur,body.v-mobile.canvas #xShade{display:none;}
+    body.v-mobile.canvas:not(.p) #mbg{background:linear-gradient(180deg,rgba(0,0,0,.6) 0,transparent 96px,transparent 42%,
+        rgba(0,0,0,.55) calc(100% - 340px),#121212 calc(100% - 236px));}
+    body.v-mobile.canvas:not(.p) #mLine{display:flex;flex:1;min-height:60px;align-items:flex-end;padding:0 4px 22px;
+        font-size:calc(var(--lsz,24px) * .86);font-weight:700;line-height:1.3;letter-spacing:-.01em;color:#fff;
+        text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
+    #mLine .in{display:block;transition:opacity .3s ease;}
+    #mLine.kara .w{background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.5) var(--p,0%) 100%);
+        -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;}
+    #mLine.kara .w.done{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}
+    body.v-mobile.canvas:not(.p) #top{flex-direction:row;align-items:center;gap:14px;padding-top:0;}
+    body.v-mobile.canvas:not(.p) #artBox{width:52px;border-radius:4px;box-shadow:0 2px 10px rgba(0,0,0,.35);}
+    body.v-mobile.canvas:not(.p) #meta{margin:0;flex:1;}
+    body.v-mobile.canvas:not(.p) .ttl{font-size:22px;line-height:28px;}
+    body.v-mobile.canvas:not(.p) #panel{flex:0 0 210px;min-height:0;}
+    @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
+
     /* Up Next and Settings take the whole window; the header closes them. */
     body.v-mobile.p:not(.pl) #top,body.v-mobile.p:not(.pl) #bottom{display:none;}
     body.v-mobile .qhead .qtitle,body.v-mobile .shd .qtitle{visibility:hidden;}
@@ -1035,6 +1060,7 @@
     <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
     <button class="wb" id="mClose" title="Close player" aria-label="Close player">${I_X}</button>
   </div>
+  <div id="mLine"></div>
   <div id="top">
     <div id="artBox"><img id="art" alt="Album art" draggable="false"></div>
     <div id="meta">
@@ -1327,7 +1353,7 @@
             body.classList.toggle('p', !!panel);
             body.classList.toggle('pl', panel === 'lyrics');
             el.pvLyrics.classList.toggle('show', panel === 'lyrics' || (v === 'mobile' && !panel));
-            el.mTitle.textContent = panel === 'queue' ? 'Playing Next' : panel === 'settings' ? 'Settings' : panel === 'lyrics' ? 'Lyrics' : 'Now Playing';
+            paintTitle();
             el.pvQueue.classList.toggle('show', panel === 'queue');
             el.pvSettings.classList.toggle('show', panel === 'settings');
             el.bLyr.classList.toggle('on', panel === 'lyrics');
@@ -1350,6 +1376,13 @@
             remeasure();
         }
 
+        let ctxName = '';
+        function paintTitle() {
+            el.mTitle.textContent = panel === 'queue' ? 'Playing Next' : panel === 'settings' ? 'Settings'
+                : panel === 'lyrics' ? 'Lyrics' : ctxName || 'Now Playing';
+            el.mTitle.style.textTransform = !panel && ctxName ? 'none' : '';
+        }
+
         const setMode = m => {
             mode = m;
             localStorage.setItem('wp7-mode', m);
@@ -1358,7 +1391,7 @@
         };
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
-        const withCanvas = () => view === 'expanded' || view === 'full';
+        const withCanvas = () => view === 'expanded' || view === 'full' || (view === 'mobile' && !panel);
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -1815,6 +1848,8 @@ void main() {
             shuffle = s ? (s.shuffle ? (s.smartShuffle ? 2 : 1) : 0) : (sp.getShuffle?.() ? 1 : 0);
             repeat = s?.repeat ?? sp.getRepeat?.() ?? 0;
             limits = s?.restrictions || null;
+            const cn = s?.context?.metadata?.context_description || sp.data?.context?.metadata?.context_description || '';
+            if (cn !== ctxName) { ctxName = cn; paintTitle(); }
             paintModes();
             syncProgress();
             if (lyrOn()) updateLyrics(lyrPos());
@@ -2142,6 +2177,7 @@ void main() {
         function renderLyrics() {
             lyr.active = null;
             lyr.els = [];
+            setLine(null);
             if (!currentLyrics?.lines?.length) {
                 el.lyrScroll.innerHTML = `<div class="status">${I_NO_LYR}<div class="msg">No lyrics available</div></div>`;
                 return;
@@ -2174,6 +2210,12 @@ void main() {
             }
         }
 
+        // The single line shown over the Canvas.
+        function setLine(line) {
+            el.mLine.className = line?.classList.contains('kara') ? 'kara' : '';
+            el.mLine.innerHTML = line ? `<span class="in">${line.innerHTML}</span>` : '';
+        }
+
         // Scrolls only the lyrics box (scrollIntoView would also move the window's layout).
         // Centred, or a third of the way down in the mobile view, like Spotify's phone app.
         function scrollToLine(line, smooth) {
@@ -2195,6 +2237,7 @@ void main() {
                 lyr.idx = ai;
                 lyr.word = -1;
                 lyr.active = null;
+                if (ai < 0) setLine(null);
                 // Only update lines whose state changed.
                 const lo = Math.max(0, Math.min(was < 0 ? 0 : was, ai));
                 const hi = Math.min(lyr.els.length - 1, Math.max(was, ai));
@@ -2205,6 +2248,7 @@ void main() {
                         line.classList.remove('past');
                         line.classList.add('active');
                         lyr.active = line;
+                        setLine(line);
                         scrollToLine(line, true);
                     } else {
                         line.classList.remove('active');
@@ -2216,19 +2260,23 @@ void main() {
             // Word-by-word fill.
             const words = lyr.active?.classList.contains('kara') ? lines[ai]?.words : null;
             if (!words?.length) return;
-            const spans = lyr.active.children;
+            const spans = lyr.active.children, mSpans = el.mLine.firstChild?.children || [];
             let wi = -1;
             for (let i = words.length - 1; i >= 0; i--) { if (pos >= words[i].t) { wi = i; break; } }
             if (wi !== lyr.word) {
                 for (let i = 0; i < spans.length; i++) {
                     spans[i].classList.toggle('done', i < wi);
                     if (i > wi) spans[i].style.setProperty('--p', '0%');
+                    mSpans[i]?.classList.toggle('done', i < wi);
+                    if (i > wi) mSpans[i]?.style.setProperty('--p', '0%');
                 }
                 lyr.word = wi;
             }
             if (wi >= 0) {
                 const w = words[wi];
-                spans[wi]?.style.setProperty('--p', `${(clamp01((pos - w.t) / (w.d || 1)) * 100).toFixed(1)}%`);
+                const pct = `${(clamp01((pos - w.t) / (w.d || 1)) * 100).toFixed(1)}%`;
+                spans[wi]?.style.setProperty('--p', pct);
+                mSpans[wi]?.style.setProperty('--p', pct);
             }
         }
 
@@ -2294,6 +2342,7 @@ void main() {
             karaoke = !karaoke;
             el.togKara.classList.toggle('on', karaoke);
             localStorage.setItem('wp7-kara', karaoke);
+            lyricCache.clear();
             renderLyrics();
             lyr.idx = -1;
         };
