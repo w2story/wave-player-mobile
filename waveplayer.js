@@ -138,6 +138,8 @@
     const provOff  = new Set((localStorage.getItem('wp7-prov-off') || '').split(',').filter(Boolean));
     let   mxmToken = localStorage.getItem('wp7-mxm') || '';
     let   karaoke  = localStorage.getItem('wp7-kara') !== 'false';
+    let   pronJa   = localStorage.getItem('wp7-pron-ja') !== 'false';
+    let   pronEn   = localStorage.getItem('wp7-pron-en') !== 'false';
 
     /* Runtime state */
 
@@ -497,6 +499,235 @@
         netease: fromNetease, musixmatch: fromMusixmatch,
     };
 
+
+    /* Pronunciation: Korean reading of Japanese and English lines, like Apple Music.
+       Japanese readings come from kuromoji, English from the CMU pronouncing dictionary;
+       both are written in Hangul following Korean loanword spelling. Loaded from jsDelivr
+       the first time a song needs them, then kept for the session. */
+
+    // Katakana (pronunciation) -> Hangul, Korean loanword style like Apple Music's.
+    const KANA_ROWS = {
+      // [cho, vowels a i u e o] ; cho index into initial consonants; vowel per column
+      'アイウエオ': [11, null], 'カキクケコ': [15], 'ガギグゲゴ': [0], 'サシスセソ': [9], 'ザジズゼゾ': [12],
+      'タチツテト': [16], 'ダヂヅデド': [3], 'ナニヌネノ': [2], 'ハヒフヘホ': [18], 'バビブベボ': [7],
+      'パピプペポ': [17], 'マミムメモ': [6], 'ラリルレロ': [5],
+    };
+    const V = [0, 20, 13, 5, 8]; // ㅏ ㅣ ㅜ ㅔ ㅗ
+    const KANA = {};
+    for (const [row, [cho]] of Object.entries(KANA_ROWS)) [...row].forEach((k, i) => { KANA[k] = [cho, V[i]]; });
+    Object.assign(KANA, {
+      'ス': [9, 18], 'ズ': [12, 18], 'ヅ': [12, 18], 'ツ': [14, 18], 'チ': [14, 20], 'ジ': [12, 20], 'ヂ': [12, 20],
+      'ヤ': [11, 2], 'ユ': [11, 17], 'ヨ': [11, 12], 'ワ': [11, 9], 'ヲ': [11, 8], 'ヴ': [7, 13],
+      'ァ': [11, 0], 'ィ': [11, 20], 'ゥ': [11, 13], 'ェ': [11, 5], 'ォ': [11, 8],
+      'ャ': [11, 2], 'ュ': [11, 17], 'ョ': [11, 12], 'ヮ': [11, 9],
+    });
+    const SMALL_Y = { 'ャ': 2, 'ュ': 17, 'ョ': 12 };          // ㅑ ㅠ ㅛ
+    const PLAIN_Y = { 2: 0, 17: 13, 12: 8 };                    // ㅏ ㅜ ㅗ (after ㅈ ㅊ)
+    const SMALL_V = { 'ァ': 0, 'ィ': 20, 'ゥ': 13, 'ェ': 5, 'ォ': 8 };
+    const W_V = { 20: 16, 5: 15, 8: 14, 0: 9 };                 // ウィ위 ウェ웨 ウォ워 ウァ와
+    const hangul = (c, v, j = 0) => String.fromCharCode(0xAC00 + (c * 21 + v) * 28 + j);
+    const toKata = s => s.replace(/[ぁ-ゖ]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+
+    function kataToHangul(input) {
+      const s = toKata(input);
+      const out = [];          // {c,v,j} or raw string
+      let prev = null;         // last syllable object
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i], last = out[out.length - 1];
+        if (ch === 'ッ') { if (prev && !prev.j) prev.j = 19; continue; }        // ㅅ받침
+        if (ch === 'ン') { if (prev && !prev.j) prev.j = 4; else out.push(prev = { c: 11, v: 18, j: 4 }); continue; }
+        if (ch === 'ー') continue;
+        if (prev && last === prev && !prev.j) {
+          if (SMALL_Y[ch] != null && prev.v === 20) {                            // キャ 캬, チャ 차
+            const y = SMALL_Y[ch];
+            prev.v = (prev.c === 12 || prev.c === 14) ? PLAIN_Y[y] : y;
+            continue;
+          }
+          if (SMALL_V[ch] != null) {
+            const v = SMALL_V[ch];
+            if (prev.c === 11 && prev.v === 13) prev.v = W_V[v] ?? v;            // ウィ 위
+            else { if (prev.c === 18 && prev.v === 13) prev.c = 17;              // ファ 파
+                   prev.v = v; }                                                 // ティ 티, チェ 체
+            continue;
+          }
+          // Long vowels: オウ→오, ウウ→우 (エイ stays 에이).
+          if (ch === 'ウ' && (prev.v === 8 || prev.v === 13 || prev.v === 12 || prev.v === 17)) continue;
+        }
+        const k = KANA[ch];
+        if (k) { out.push(prev = { c: k[0], v: k[1], j: 0 }); continue; }
+        out.push(ch); prev = null;
+      }
+      return out.map(x => typeof x === 'string' ? x : hangul(x.c, x.v, x.j)).join('');
+    }
+
+    // Words that start a new spaced chunk (Apple-style: roughly per bunsetsu).
+    const INDEP = new Set(['名詞', '動詞', '形容詞', '副詞', '連体詞', '接続詞', '感動詞', '接頭詞']);
+    function linePron(tokens, dict) {
+      let out = '', prevPos = null;
+      for (const t of tokens) {
+        if (/^\s+$/.test(t.surface_form)) { out += ' '; prevPos = null; continue; }
+        const jp = /[぀-ヿ㐀-鿿々〆ヶ]/.test(t.surface_form);
+        const p = jp ? kataToHangul(t.pronunciation || t.reading || t.surface_form) : (dict ? enText(t.surface_form, dict) : t.surface_form);
+        const indep = INDEP.has(t.pos) && t.pos_detail_1 !== '非自立' && t.pos_detail_1 !== '接尾';
+        // A new chunk starts at an independent word, except inside compounds
+        // (noun+noun, verb+verb) and after a prefix.
+        if (out && !out.endsWith(' ') && indep && prevPos && prevPos !== '接頭詞' &&
+            !(prevPos === '名詞' && t.pos === '名詞') && !(prevPos === '動詞' && t.pos === '動詞') && !(prevPos === '名詞' && t.pos === '動詞'))
+          out += ' ';
+        out += p;
+        prevPos = t.pos;
+      }
+      return out.replace(/\s+/g, ' ').trim();
+    }
+
+    // ARPAbet -> Hangul, following Korean loanword spelling (외래어 표기법) loosely.
+    // Vowels: [jung] or two syllables for diphthongs.
+    const EV = { AA:[0], AE:[1], AH:[4], AO:[8], AW:[0,13], AY:[0,20], EH:[5], ER:[4], EY:[5,20],
+                 IH:[20], IY:[20], OW:[8], OY:[8,20], UH:[13], UW:[13] };
+    // Onset consonants -> choseong.
+    const EC = { B:7, CH:14, D:3, DH:3, F:17, G:0, HH:18, JH:12, K:15, L:5, M:6, N:2, NG:11, P:17, R:5,
+                 S:9, SH:9, T:16, TH:9, V:7, Z:12, ZH:12 };
+    // Codas written as a final consonant (after a short vowel for p/t/k).
+    const JONG = { M:16, N:4, NG:21, L:8, P:17, T:19, K:1 };
+    const SHORT = new Set(['AE', 'EH', 'IH', 'AH', 'UH', 'AA', 'AO']);
+    // Y- and W- glides before a vowel.
+    const YV = { 0:2, 4:6, 5:7, 8:12, 13:17, 1:3, 20:20 };      // 야 여 예 요 유 얘 이
+    const WV = { 0:9, 4:14, 5:15, 20:16, 8:14, 13:13, 1:10 };    // 와 워 웨 위 워 우 왜
+    const hgE = (c, v, j = 0) => String.fromCharCode(0xAC00 + (c * 21 + v) * 28 + j);
+
+    function arpaToHangul(arpa) {
+      const raw = arpa.split(' '), ph = raw.map(p => p.replace(/\d/g, ''));
+      const isV = p => p in EV;
+      const syl = [];                      // {c,v,j}
+      const add = (c, v) => { const s = { c, v, j: 0 }; syl.push(s); return s; };
+      for (let i = 0; i < ph.length; i++) {
+        const p = ph[i], next = ph[i + 1], prev = ph[i - 1];
+        if (isV(p)) {
+          const vs = EV[p];
+          add(11, vs[0]);
+          for (let k = 1; k < vs.length; k++) {
+            // OW, AW: 오, 아우 → keep 오 alone (Korean writes "show" as 쇼).
+            if (p === 'OW') break;
+            add(11, vs[k]);
+          }
+          continue;
+        }
+        if ((p === 'Y' || p === 'W') && next && isV(next)) {
+          const v = EV[next][0], g = p === 'Y' ? YV[v] : WV[v];
+          // Glide joins the previous onset if there is one (twelve → 트웰브 kept simple).
+          const s = add(11, g ?? v);
+          for (let k = 1; k < EV[next].length; k++) if (next !== 'OW') add(11, EV[next][k]);
+          i++;
+          continue;
+        }
+        if (p === 'Y' || p === 'W') continue;
+        if (next && (isV(next))) {
+          // Onset: consonant + vowel in one syllable.
+          const vs = EV[next];
+          let v = vs[0];
+          if (p === 'SH' || p === 'ZH') v = v === 20 ? 16 : (YV[v] ?? v);   // 샤 셔 쇼 슈 쉬
+          if ((p === 'CH' || p === 'JH') && v === 6) v = 4;
+          // Unstressed to-/de- at the start: tonight 투나이트, today 투데이.
+          if (i === 0 && (p === 'T' || p === 'D') && raw[1] === 'AH0') v = 13;
+          // Syllabic -le / -el at the end: little 리틀, twinkle 트윙클.
+          if (raw[i + 1] === 'AH0' && ph[i + 2] === 'L' && i + 3 === ph.length) {
+            if (p === 'L' && prev && isV(prev) && syl.length && !syl[syl.length - 1].j) syl[syl.length - 1].j = 8;
+            add(EC[p], 18).j = 8; i += 2; continue;
+          }
+          // L between vowels doubles: hello → 헬로.
+          if ((p === 'L') && prev && isV(prev) && syl.length && !syl[syl.length - 1].j) syl[syl.length - 1].j = 8;
+          add(EC[p], v);
+          for (let k = 1; k < vs.length; k++) if (next !== 'OW') add(11, vs[k]);
+          i++;
+          continue;
+        }
+        // Coda or cluster consonant.
+        const last = syl[syl.length - 1];
+        const afterVowel = prev && isV(prev);
+        if (p === 'R') continue;                                       // car 카, heart 하트
+        if (p === 'HH') continue;
+        if (afterVowel && last && !last.j && JONG[p] != null &&
+            (p === 'M' || p === 'N' || p === 'NG' || p === 'L' || SHORT.has(prev))) {
+          // p/t/k as a final only at the end of a word or before another consonant that isn't l/r.
+          if (!'PTK'.includes(p[0]) || p.length > 1 || !next || !/^(L|R|S|Z)$/.test(next)) { last.j = JONG[p]; continue; }
+        }
+        // ts / dz clusters: it's 잇츠, needs 니즈.
+        if ((p === 'T' && next === 'S') || (p === 'D' && next === 'Z')) { add(p === 'T' ? 14 : 12, 18); i++; continue; }
+        // Otherwise its own syllable with 으 (이 for ch/j/sh).
+        const v = (p === 'CH' || p === 'JH' || p === 'SH' || p === 'ZH') ? 20 : 18;
+        if (p === 'NG') { if (last && !last.j) last.j = 21; continue; }
+        if (p === 'L' && last && !last.j) { last.j = 8; continue; }
+        add(EC[p], v);
+      }
+      return syl.map(s => hgE(s.c, s.v, s.j)).join('');
+    }
+    // English words in a string; words the dictionary lacks are left as they are.
+    function enText(text, dict) {
+      return text.replace(/[A-Za-z][A-Za-z'’]*/g, w => {
+        const k = w.toLowerCase().replace(/’/g, "'");
+        const a = dict[k] || dict[k.replace(/in'$/, 'ing')];
+        return a ? arpaToHangul(a) : w;
+      });
+    }
+
+    const CDN = 'https://cdn.jsdelivr.net/npm/';
+    let tokP = null, cmuP = null;
+
+    // kuromoji joins its dictionary path with path.join, which turns https:// into https:/;
+    // put the second slash back while it loads.
+    function loadKuromoji() {
+        if (tokP) return tokP;
+        tokP = new Promise((res, rej) => {
+            const build = () => {
+                const X = XMLHttpRequest.prototype, open = X.open;
+                X.open = function (m, u, ...a) { return open.call(this, m, typeof u === 'string' ? u.replace(/^https:\/(?!\/)/, 'https://') : u, ...a); };
+                window.kuromoji.builder({ dicPath: CDN + 'kuromoji@0.1.2/dict/' }).build((e, t) => {
+                    X.open = open;
+                    e ? rej(e) : res(t);
+                });
+            };
+            if (window.kuromoji) return build();
+            const sc = document.createElement('script');
+            sc.src = CDN + 'kuromoji@0.1.2/build/kuromoji.js';
+            sc.onload = build;
+            sc.onerror = () => rej(new Error('script'));
+            document.head.appendChild(sc);
+        }).catch(e => { console.warn('[WavePlayer] Japanese reader unavailable', e); tokP = null; return null; });
+        return tokP;
+    }
+
+    function loadCmu() {
+        if (cmuP) return cmuP;
+        cmuP = fetch(CDN + 'cmu-pronouncing-dictionary@3.0.0/index.js')
+            .then(r => r.ok ? r.text() : Promise.reject(new Error('HTTP ' + r.status)))
+            .then(t => JSON.parse(t.slice(t.indexOf('= {') + 2, t.lastIndexOf('}') + 1)))
+            .catch(e => { console.warn('[WavePlayer] English dictionary unavailable', e); cmuP = null; return null; });
+        return cmuP;
+    }
+
+    const RE_KANA = /[\u3040-\u30ff]/, RE_JP = /[\u3040-\u30ff\u3400-\u9fff々〆ヶ]/, RE_LATIN = /[A-Za-z]/, RE_HANGUL = /[\uac00-\ud7a3]/;
+
+    // Adds .pron to each line that needs one. Returns true if anything changed.
+    async function addPron(result) {
+        const key = `${pronJa}${pronEn}`;
+        if (!result?.lines?.length || result.pronKey === key) return false;
+        const lines = result.lines;
+        // Kanji without any kana is Chinese, not Japanese.
+        const ja = pronJa && lines.some(l => RE_KANA.test(l.text));
+        const en = pronEn && lines.some(l => RE_LATIN.test(l.text));
+        const [tk, dict] = await Promise.all([ja ? loadKuromoji() : null, en ? loadCmu() : null]);
+        for (const l of lines) {
+            l.pron = null;
+            if (RE_HANGUL.test(l.text)) continue;
+            let p = null;
+            if (tk && RE_JP.test(l.text)) p = linePron(tk.tokenize(l.text), dict);
+            else if (dict && RE_LATIN.test(l.text)) p = enText(l.text, dict).replace(/\s+/g, ' ').trim();
+            if (p && p !== l.text && !(p === l.text.replace(/[,.!?]/g, ''))) l.pron = p;
+        }
+        result.pronKey = key;
+        return true;
+    }
+
     /* Fetch with fallback */
 
     // Fill in missing line and word durations.
@@ -823,6 +1054,11 @@
     .lyric.active{color:#fff;transform:scale(1.04);filter:blur(0);will-change:transform;
         text-shadow:0 0 30px rgba(255,255,255,.18);}
     .lyric.kara{white-space:pre-wrap;}
+    /* Korean reading under the line. */
+    .pron{font-size:.6em;font-weight:600;letter-spacing:0;line-height:1.3;margin-top:3px;white-space:normal;
+        -webkit-text-fill-color:currentColor;}
+    .lyric:not(.active) .pron{opacity:.85;}
+    #mLine .pron{font-size:.66em;margin-top:4px;}
     .lyric.kara.active .w{
         background-image:linear-gradient(90deg,#fff 0 var(--p,0%),rgba(255,255,255,.36) var(--p,0%) 100%);
         -webkit-background-clip:text;background-clip:text;
@@ -1112,6 +1348,8 @@
         <div class="stitle">Lyrics</div>
         <div class="scard">
           <div class="sr"><span class="slbl">Center lyrics</span><div class="tog ${centerLyrics?'on':''}" id="togCenter"></div></div>
+          <div class="sr"><span class="slbl">Pronunciation · Japanese</span><div class="tog ${pronJa?'on':''}" id="togPronJa"></div></div>
+          <div class="sr"><span class="slbl">Pronunciation · English</span><div class="tog ${pronEn?'on':''}" id="togPronEn"></div></div>
           <div class="sr"><span class="slbl">Lyrics size</span>
             <div class="fsrow"><input type="range" class="fsslider" id="fsSlider" min="14" max="40" value="${fontSize}"><span class="fsval" id="fsVal">${fontSize}px</span></div></div>
           <div class="sr fullOnly" id="offRow"><span class="slbl">Timing for this song</span></div>
@@ -1829,6 +2067,17 @@ void main() {
             lyr.idx = -1;
             updateLyrics(lyrPos());
             lyricsLoop();
+            refreshPron(token);
+        }
+
+        // Readings can take a moment the first time (dictionaries download), so the lyrics
+        // show first and are redrawn once they're ready.
+        async function refreshPron(token = lyricReq) {
+            const res = currentLyrics;
+            if (!(await addPron(res)) || token !== lyricReq || res !== currentLyrics) return;
+            renderLyrics();
+            lyr.idx = -1;
+            updateLyrics(lyrPos());
         }
 
         /* Player state (driven by PlayerAPI events, no polling) */
@@ -2186,7 +2435,8 @@ void main() {
             el.lyrScroll.innerHTML = currentLyrics.lines.map(l => {
                 const words = kara && l.words;
                 const inner = words ? l.words.map(w => `<span class="w">${esc(w.text)}</span>`).join('') : esc(l.text);
-                return `<div class="lyric${words ? ' kara' : ''}" data-t="${l.t}">${inner}</div>`;
+                const pron = l.pron ? `<div class="pron">${esc(l.pron)}</div>` : '';
+                return `<div class="lyric${words ? ' kara' : ''}" data-t="${l.t}">${inner}${pron}</div>`;
             }).join('');
             lyr.els = [...el.lyrScroll.children];
         }
@@ -2264,7 +2514,8 @@ void main() {
             let wi = -1;
             for (let i = words.length - 1; i >= 0; i--) { if (pos >= words[i].t) { wi = i; break; } }
             if (wi !== lyr.word) {
-                for (let i = 0; i < spans.length; i++) {
+                for (let i = 0; i < words.length; i++) {
+                    if (!spans[i]) break;
                     spans[i].classList.toggle('done', i < wi);
                     if (i > wi) spans[i].style.setProperty('--p', '0%');
                     mSpans[i]?.classList.toggle('done', i < wi);
@@ -2338,6 +2589,15 @@ void main() {
             el.lyrScroll.style.setProperty('--lsz', `${fontSize}px`);
             localStorage.setItem('wp7-fs', fontSize);
         };
+        const togPron = (k, elx) => () => {
+            if (k === 'ja') pronJa = !pronJa; else pronEn = !pronEn;
+            const on = k === 'ja' ? pronJa : pronEn;
+            elx.classList.toggle('on', on);
+            localStorage.setItem(`wp7-pron-${k}`, on);
+            refreshPron();
+        };
+        el.togPronJa.onclick = togPron('ja', el.togPronJa);
+        el.togPronEn.onclick = togPron('en', el.togPronEn);
         el.togKara.onclick = () => {
             karaoke = !karaoke;
             el.togKara.classList.toggle('on', karaoke);
