@@ -202,7 +202,7 @@
         'End of track': '곡이 끝날 때', '5 minutes': '5분', '10 minutes': '10분', '15 minutes': '15분', '30 minutes': '30분',
         '45 minutes': '45분', '1 hour': '1시간', 'No playlists': '플레이리스트가 없습니다',
         'Lyrics source': '가사 출처', 'Lyrics font…': '가사 글꼴…', 'Automatic': '자동',
-        'Open in Spotify window': 'Spotify 창에서 열기 (최대 높이)', 'Open in phone view': '폰 화면으로 열기', 'Open as mini player': '미니 플레이어로 열기',
+        'Open in phone view': '폰 화면으로 열기', 'Open as mini player': '미니 플레이어로 열기',
         'Couldn’t set the sleep timer': '수면 타이머를 설정하지 못했습니다', 'Couldn’t add to playlist': '플레이리스트에 추가하지 못했습니다',
         'Couldn’t change following': '팔로우를 변경하지 못했습니다', 'Window sizes reset': '창 크기를 초기화했습니다',
         'Lyrics source: automatic': '가사 출처: 자동',
@@ -1726,7 +1726,7 @@
     body.v-mobile.canvas #xArt,body.v-mobile.canvas #xBlur{display:none;}
     body.v-mobile #mbg{z-index:0;}
     body.v-mobile.canvas:not(.pl):not(.ps) #mbg{background:var(--cvbg,var(--mtop,#121212));transition:background-color 1.2s ease;}
-    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(var(--pw,100vw) * 16 / 9);bottom:auto;height:var(--vh);}
+    body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);}
     body.v-mobile.canvas #xVid{height:var(--vh);
         -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);
         mask-image:linear-gradient(to bottom,#000 0,#000 calc(100% - 46%),transparent 100%);}
@@ -1735,7 +1735,7 @@
         transparent 38%,rgba(0,0,0,.35) 70%,rgba(0,0,0,0) 100%);}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
-        height:clamp(60px,calc(var(--pw,100vw) * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
+        height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - 470px));align-items:flex-end;padding:0 4px 22px;
         font-size:calc(var(--lsz,24px) * .86);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);letter-spacing:-.01em;color:#fff;
         text-shadow:0 1px 12px rgba(0,0,0,.45);white-space:pre-wrap;}
     #mLine .in{display:block;transition:opacity .3s ease;}
@@ -1825,16 +1825,6 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
 
-    /* Window mode: the background (colour or Canvas) fills Spotify's whole window; the
-       content keeps a readable width in the middle. */
-    body.dock{--pw:min(100vw,640px);}
-    #dAmb{display:none;}
-    /* Narrow window: keep the header clear of Spotify's own window buttons. */
-    @media (max-width:880px){body.dock #mhead{margin-top:30px;}}
-    body.dock #main,body.dock #mmore{max-width:640px;margin-left:auto;margin-right:auto;}
-    body.dock.canvas:not(.pl):not(.ps) #xbg{--vh:max(100vh, calc(100vw * 16 / 9 * .6));left:0;right:0;width:auto;}
-    body.dock.pq #panel{left:calc(50% - min(calc(100vw - 20px),620px) / 2);right:auto;width:min(calc(100vw - 20px),620px);}
-
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
     body.v-mobile.ps #top,body.v-mobile.ps #bottom{display:none;}
@@ -1900,7 +1890,6 @@
 </div>
 <div id="xbg"><img id="xArt" alt="" draggable="false"><video id="xVid" muted loop playsinline preload="auto"></video><div id="xBlur"></div><div id="xShade"></div></div>
 <div id="grain"></div>
-<div id="dAmb"></div>
 <div id="mbg"></div>
 
 <div id="main">
@@ -2093,8 +2082,6 @@
     async function openPip() {
         // Clicking the launcher again closes it.
         if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; return; }
-        // Window mode and the mini player don't run together.
-        if (dockFrame) closeDock(true);
         if (!('documentPictureInPicture' in window)) {
             Spicetify.showNotification('WavePlayer: this Spotify version has no picture-in-picture support. Update Spotify.', true);
             return;
@@ -2139,10 +2126,8 @@
     };
 
     // full: the full-screen view, drawn in a frame over Spotify's window instead of a PiP window.
-    // dock: the phone view in a frame over Spotify's window (window mode): it can be as tall as
-    // the screen, unlike a PiP window, and Spotify's own window moves and sizes it.
-    function setupPip(win, full = false, dock = false) {
-        const framed = full || dock;
+    function setupPip(win, full = false) {
+        const framed = full;
         lang = pickLang();
         const doc = win.document;
         // A frame's own visibility can stay hidden; full screen follows Spotify's window.
@@ -2301,8 +2286,7 @@
             if (full && lyricsOnly && !panel) panel = 'lyrics';
             body.classList.toggle('lo', full && lyricsOnly);
             // The mobile view keeps its window size; panels open inside it.
-            const v = full ? 'full' : (dock || mode === 'mobile') ? 'mobile' : panel ? 'panel' : mode;
-            body.classList.toggle('dock', dock);
+            const v = full ? 'full' : mode === 'mobile' ? 'mobile' : panel ? 'panel' : mode;
             body.classList.remove('v-compact', 'v-expanded', 'v-panel', 'v-mobile');
             body.classList.add(`v-${v}`);
             body.classList.toggle('p', !!panel);
@@ -2353,7 +2337,7 @@
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
             (view === 'mobile' && (!panel || panel === 'queue' || (panel === 'lyrics' && lf.bg === 'canvas')));
-        const closePlayer = () => { if (full) closeFull(); else if (dock) closeDock(true); else try { win.close(); } catch {} };
+        const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
 
@@ -2790,7 +2774,6 @@ void main() {
                 el.art.src = small;
                 el.xArt.src = big || small;
                 el.xBlur.style.backgroundImage = `url('${small.replace(/'/g, "\\'")}')`;
-                el.dAmb.style.backgroundImage = `url('${(big || small).replace(/'/g, "\\'")}')`;
                 setBackground(small);
                 setSwirl(small);
                 requestPalette(small);
@@ -3156,7 +3139,6 @@ void main() {
                 '-',
                 { t: 'Lyrics source', sub: true, f: () => openSources(), off: !curSet },
                 { t: 'Lyrics font…', f: () => win.setTimeout(() => openFont(dotsEl()), 0) },
-                ...(full ? [] : [{ t: dock ? 'Open as mini player' : 'Open in Spotify window', f: () => dock ? (closeDock(true), openPip()) : openDock() }]),
                 '-',
                 { t: 'Settings', f: () => { panel = 'settings'; layout(); } },
             ], dotsEl());
@@ -3813,7 +3795,7 @@ void main() {
         el.mini.onclick = () => setMode('compact');
         // Mobile view
         el.wMob.onclick   = () => setMode('mobile');
-        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else if (dock) closeDock(true); else setMode('compact'); };
+        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('compact'); };
         el.mDots.onclick  = openMenu;
         el.mClose.onclick = closePlayer;
         el.mlh.onclick    = () => togglePanel('lyrics');
@@ -3960,29 +3942,6 @@ void main() {
 
     /* Full screen: a frame over Spotify's window. The PiP window closes meanwhile and
        comes back when full screen is closed with ✕ (Esc gives no user gesture to reopen it). */
-
-    let dockFrame = null, dockCleanup = null;
-    function openDock() {
-        if (dockFrame) return;
-        if (pipWindow && !pipWindow.closed) { pipWindow.close(); pipWindow = null; }
-        currentTrackUri = null;
-        dockFrame = document.createElement('iframe');
-        dockFrame.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;border:0;z-index:2147483646;background:#121212';
-        document.body.appendChild(dockFrame);
-        dockCleanup = setupPip(dockFrame.contentWindow, false, true);
-        dockFrame.contentWindow.focus();
-        // Remembered, so Spotify opens in window mode next time too.
-        try { localStorage.setItem('wp7-dock', 'true'); } catch {}
-    }
-    // byUser: closed on purpose (✕, back), so don't reopen it at the next start.
-    function closeDock(byUser) {
-        if (!dockFrame) return;
-        const frame = dockFrame;
-        dockFrame = null;
-        dockCleanup?.();
-        frame.remove();
-        if (byUser) try { localStorage.removeItem('wp7-dock'); } catch {}
-    }
 
     let fullFrame = null, fullCleanup = null, reopenPip = false;
     function openFull() {
@@ -4233,9 +4192,8 @@ void main() {
         }, 1000);
     } catch {}
     try { Spicetify.Keyboard?.registerShortcut?.({ key: 'm', ctrl: true, shift: true }, openPip); } catch {}
-    // Window mode: Ctrl+Shift+D, and back where it was if Spotify closed with it open.
-    try { Spicetify.Keyboard?.registerShortcut?.({ key: 'd', ctrl: true, shift: true }, () => dockFrame ? closeDock(true) : openDock()); } catch {}
-    try { if (localStorage.getItem('wp7-dock') === 'true') setTimeout(openDock, 1500); } catch {}
+    // Window mode was removed; forget it if an earlier build left it switched on.
+    try { localStorage.removeItem('wp7-dock'); } catch {}
 
     // Last, and wrapped, so it can never break the player.
     try { checkVersion(); } catch {}
