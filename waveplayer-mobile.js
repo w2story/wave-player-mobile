@@ -28,7 +28,7 @@
     // summary = short list on the update screen; notes = full changelog.
     const VERSION = 'v3';
     // This edition (phone view, translation, …): its own version and where updates come from.
-    const MOBILE_VERSION = '1.0.0';
+    const MOBILE_VERSION = '1.1.0';
     const REPO = 'w2story/wave-player-mobile';
 
     const CHANGELOG = [
@@ -184,16 +184,17 @@
     const saveLf = () => { try { localStorage.setItem('wp7-lfont', JSON.stringify(lf)); } catch {} };
 
 
-    /* Interface language. "auto" follows Spotify's language; Korean and English are built in.
-       English is written in place; Korean comes from this table (exact phrases), then from
-       the patterns below (phrases with a name or number in them). */
+    /* Interface language. "auto" follows Spotify's language. English is written in place;
+       the others come from the tables below (exact phrases), then from the patterns (phrases
+       with a name or number in them). Every table has the same keys as KO. */
 
+    const LANGS = ['ko', 'en', 'ja', 'zh', 'es'];
     const langPref = () => localStorage.getItem('wp7-lang') || 'auto';
     const pickLang = () => {
         const v = langPref();
-        if (v !== 'auto') return v;
+        if (LANGS.includes(v)) return v;
         const loc = String(Spicetify.Locale?.getLocale?.() || navigator.language || '').toLowerCase();
-        return loc.startsWith('ko') ? 'ko' : 'en';
+        return LANGS.find(l => loc.startsWith(l)) || 'en';
     };
     let lang = pickLang();
     const KO = {
@@ -253,32 +254,236 @@
         // Source status
         'word synced': '음절 싱크', 'line synced': '줄 싱크', 'not synced': '싱크 없음', 'not found': '없음',
         'searching…': '찾는 중…', 'needs token': '토큰 필요', 'off': '꺼짐', 'not asked': '확인 안 함',
+        // Messages ({0} is filled in)
+        'Playing from {0}': '{0} 재생 중에서', 'Translation failed: {0}': '번역 실패: {0}',
+        'No update source set yet': '업데이트 저장소가 아직 설정되지 않았습니다', 'Update {0} available · command copied': '새 버전 {0} · 업데이트 명령을 복사했습니다',
+        'paste the copied command in a terminal to update': '터미널에 붙여넣어 업데이트하세요',
+        'Couldn’t check for updates': '업데이트를 확인하지 못했습니다', 'Add a Gemini API key': 'Gemini API 키를 넣어주세요',
     };
-    const KO_RE = [
-        [/^Saved to (.+)$/, m => `${tr(m[1])}에 저장했습니다`],
-        [/^Removed from (.+)$/, m => `${tr(m[1])}에서 삭제했습니다`],
-        [/^Remove from (.+)$/, m => `${tr(m[1])}에서 삭제`],
-        [/^Save to (.+)$/, m => `${tr(m[1])}에 저장`],
-        [/^Added to (.+)$/, m => `${m[1]}에 추가했습니다`],
-        [/^Volume (\d+)%$/, m => `볼륨 ${m[1]}%`],
-        [/^Sleep timer · (\d+) min$/, m => `수면 타이머 · ${m[1]}분`],
-        [/^Sleep timer: (.+)$/, m => `수면 타이머: ${tr(m[1].replace(/^./, c => c.toUpperCase()))}`],
-        [/^Lyrics from (.+) for this song$/, m => `이 곡은 ${m[1]} 가사를 사용합니다`],
-        [/^([\d,.]+) monthly listeners$/, m => `월별 청취자 ${m[1]}명`],
-        [/^(✓ )?Automatic(?: \((.+)\))?$/, m => `${m[1] || ''}자동${m[2] ? ` (${m[2]})` : ''}`],
-        [/^(✓ )?(LyricsPlus|Lyrically|Spotify|LRCLIB|NetEase|Musixmatch) · (.+?)( \(.+\))?$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}${m[4] || ''}`],
-        [/^(.+ • .+)$/, m => m[1].split(' • ').map(tr).join(' • ')],
-        [/^Update available: (.+)$/, m => `새 버전이 있습니다: ${m[1]}`],
-        [/^Up to date \((.+)\)$/, m => `최신 버전입니다 (${m[1]})`],
+    const JA = {
+        // Player
+        'Loading…': '読み込み中…', 'Now Playing': '再生中', 'Unknown': '不明',
+        'Play': '再生', 'Pause': '一時停止', 'Previous': '前へ', 'Next': '次へ', 'Volume': '音量', 'Mute': 'ミュート',
+        'More': 'その他', 'More options': 'その他のオプション', 'Lyrics': '歌詞', 'Lyrics preview': '歌詞プレビュー', 'Full lyrics': '歌詞を全画面表示',
+        'Playing Next': '再生キュー', 'Close player': 'プレーヤーを閉じる', 'Expand': '拡大表示', 'Back to mini player': 'ミニプレーヤーに戻る',
+        'Back': '戻る', 'Cover view': 'カバー表示', 'Phone view': 'モバイル表示', 'Settings': '設定', 'Done': '完了', 'Reset': 'リセット',
+        'Shuffle': 'シャッフル', 'Shuffle on': 'シャッフル オン', 'Smart shuffle': 'スマートシャッフル', 'Smart': 'スマート',
+        'Repeat': 'リピート', 'Repeat all': '全曲リピート', 'Repeat one': '1曲リピート', 'Timer': 'タイマー',
+        'Not available during autoplay': '自動再生中は利用できません', 'Not available for this music': 'この音楽では利用できません',
+        'Save to Liked Songs': 'お気に入りの曲に保存', 'Remove from Liked Songs': 'お気に入りの曲から削除',
+        'Liked Songs': 'お気に入りの曲', 'Your Episodes': 'マイエピソード',
+        'Lyrics earlier': '歌詞を早く', 'Lyrics later': '歌詞を遅く', 'Lyrics timing': '歌詞のタイミング', 'Lyrics font': '歌詞のフォント',
+        'Queue': 'キュー', 'Up Next': '次に再生', 'Nothing up next': '次の曲はありません', 'No lyrics available': '歌詞がありません',
+        // Menu
+        'Add to Playlist': 'プレイリストに追加', 'Go to Album': 'アルバムへ移動', 'Go to Artist': 'アーティストへ移動',
+        'Go to Show': '番組へ移動', 'Copy Song Link': '曲のリンクをコピー', 'Copy Episode Link': 'エピソードのリンクをコピー',
+        'Link copied': 'リンクをコピーしました', 'Sleep timer': 'スリープタイマー', 'Sleep timer off': 'スリープタイマーをオフにしました',
+        'Sleep timer · end of track': 'スリープタイマー · 曲の終わり', 'Turn off': 'オフにする', '‹ Back': '‹ 戻る',
+        'End of track': '曲の終わり', '5 minutes': '5分', '10 minutes': '10分', '15 minutes': '15分', '30 minutes': '30分',
+        '45 minutes': '45分', '1 hour': '1時間', 'No playlists': 'プレイリストがありません',
+        'Lyrics source': '歌詞のソース', 'Lyrics font…': '歌詞のフォント…', 'Automatic': '自動',
+        'Open in phone view': 'モバイル表示で開く',
+        'Fold lyrics preview': '歌詞プレビューを閉じる', 'Unfold lyrics preview': '歌詞プレビューを開く', 'Open as mini player': 'ミニプレーヤーで開く',
+        'Couldn’t set the sleep timer': 'スリープタイマーを設定できませんでした', 'Couldn’t add to playlist': 'プレイリストに追加できませんでした',
+        'Couldn’t change following': 'フォローを変更できませんでした', 'Window sizes reset': 'ウィンドウサイズをリセットしました',
+        'Lyrics source: automatic': '歌詞のソース: 自動',
+        // Settings
+        'Full screen': '全画面', 'Lyrics only': '歌詞のみ', 'Background': '背景', 'Movement speed': '動きの速さ', 'Still': '静止',
+        'Expanded view': '拡大表示', 'Animated covers': '動くカバー (Canvas)', 'Center lyrics': '歌詞を中央揃え',
+        'Pronunciation · Japanese': 'ローマ字 · 日本語', 'Pronunciation · English': '発音 · 英語', 'Furigana': 'ふりがな',
+        'Translation': '翻訳', 'Translate lyrics': '歌詞を翻訳', 'Gemini API key': 'Gemini APIキー', 'optional': '任意',
+        'Lyrics size': '歌詞のサイズ', 'Change…': '変更…', 'Timing for this song': 'この曲のタイミング',
+        'Auto-hide controls': 'コントロールを自動で隠す', 'Compact': 'コンパクト', 'Expanded': '拡大', 'Lyric sources': '歌詞のソース',
+        'Word-by-word sync': '単語ごとの同期', 'Musixmatch token': 'Musixmatchトークン', 'Window': 'ウィンドウ', 'Window sizes': 'ウィンドウサイズ',
+        'Language': '言語', 'Updates': 'アップデート', 'Check for updates': 'アップデートを確認', 'Check': '確認',
+        'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': 'カバーとコントロールを隠します。スペースで再生/一時停止、矢印キーで5秒移動します。',
+        'Spotify\'s looping video for songs that have one. Other songs keep the cover.': 'Canvas動画がある曲は動画を、ない曲はカバーを表示します。',
+        'Controls fade after a few seconds without the mouse moving, and come back when it does.': 'マウスを数秒動かさないとコントロールが消え、動かすと再び表示されます。',
+        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, Lyrically, NetEase and Musixmatch are the ones that carry word timings. When none has them, word timings are estimated from the line.': '上から順に探します。単語ごとのタイミングはLyricsPlus・Lyrically (Apple Music)、NetEase、Musixmatchにあります。どこにもない場合は行の長さから推定します。',
+        'Estimate when missing': 'ない場合は推定する', 'line synced · estimated': '行同期 · 推定',
+        'Each view remembers the size you resize it to. Reset puts them all back.': '表示ごとに調整したウィンドウサイズを記憶します。リセットすると既定のサイズに戻ります。',
+        'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '曲ごとに一度だけ翻訳し、歌詞と一緒に保存します。キーはGoogle AI Studioで無料で取得できます。',
+        'Applies the next time the player opens.': 'プレーヤーを次に開いたときに適用されます。',
+        // Font panel
+        'Full lyrics background': '全画面歌詞の背景', 'Auto': '自動', 'Color': '単色', 'Cover': 'カバー', 'Canvas': 'Canvas',
+        'Weight': '太さ', 'Default': '既定', 'Regular': '標準', 'Bold': '太字', 'Heavy': '極太', 'Size': 'サイズ',
+        'Line spacing': '行間', 'Pronunciation size': '読みのサイズ', 'Translation size': '翻訳のサイズ',
+        'System': 'システム', 'Rounded': '丸ゴシック', 'Handwriting': '手書き',
+        // Cards
+        'About the artist': 'アーティスト情報', 'Credits': 'クレジット', 'Follow': 'フォローする', 'Following': 'フォロー中',
+        'Main artist': 'メインアーティスト', 'Featured artist': 'フィーチャリングアーティスト', 'Vocals': 'ボーカル', 'Lyricist': '作詞', 'Composer': '作曲',
+        'Arranger': '編曲', 'Producer': 'プロデューサー', 'Writer': '作家', 'Performers': 'パフォーマー', 'Writers': '作家',
+        'Producers': 'プロデューサー', 'Mixing engineer': 'ミキシングエンジニア', 'Mastering engineer': 'マスタリングエンジニア',
+        // Source status
+        'word synced': '単語同期', 'line synced': '行同期', 'not synced': '同期なし', 'not found': 'なし',
+        'searching…': '検索中…', 'needs token': 'トークンが必要', 'off': 'オフ', 'not asked': '未確認',
+        // Messages ({0} is filled in)
+        'Playing from {0}': '{0} から再生中', 'Translation failed: {0}': '翻訳に失敗しました: {0}',
+        'No update source set yet': 'アップデート元がまだ設定されていません', 'Update {0} available · command copied': '新しいバージョン {0} · アップデートコマンドをコピーしました',
+        'paste the copied command in a terminal to update': 'コピーしたコマンドをターミナルに貼り付けてアップデートしてください',
+        'Couldn’t check for updates': 'アップデートを確認できませんでした', 'Add a Gemini API key': 'Gemini APIキーを入力してください',
+    };
+    const ZH = {
+        // Player
+        'Loading…': '加载中…', 'Now Playing': '正在播放', 'Unknown': '未知',
+        'Play': '播放', 'Pause': '暂停', 'Previous': '上一首', 'Next': '下一首', 'Volume': '音量', 'Mute': '静音',
+        'More': '更多', 'More options': '更多选项', 'Lyrics': '歌词', 'Lyrics preview': '歌词预览', 'Full lyrics': '完整歌词',
+        'Playing Next': '播放队列', 'Close player': '关闭播放器', 'Expand': '放大', 'Back to mini player': '返回迷你播放器',
+        'Back': '返回', 'Cover view': '封面视图', 'Phone view': '手机视图', 'Settings': '设置', 'Done': '完成', 'Reset': '重置',
+        'Shuffle': '随机播放', 'Shuffle on': '随机播放已开启', 'Smart shuffle': '智能随机播放', 'Smart': '智能',
+        'Repeat': '重复播放', 'Repeat all': '全部重复', 'Repeat one': '单曲重复', 'Timer': '定时',
+        'Not available during autoplay': '自动播放时不可用', 'Not available for this music': '此音乐不可用',
+        'Save to Liked Songs': '保存到已点赞的歌曲', 'Remove from Liked Songs': '从已点赞的歌曲中移除',
+        'Liked Songs': '已点赞的歌曲', 'Your Episodes': '你的单集',
+        'Lyrics earlier': '歌词提前', 'Lyrics later': '歌词延后', 'Lyrics timing': '歌词时间', 'Lyrics font': '歌词字体',
+        'Queue': '队列', 'Up Next': '接下来播放', 'Nothing up next': '没有下一首', 'No lyrics available': '暂无歌词',
+        // Menu
+        'Add to Playlist': '添加到歌单', 'Go to Album': '转到专辑', 'Go to Artist': '转到艺人',
+        'Go to Show': '转到节目', 'Copy Song Link': '复制歌曲链接', 'Copy Episode Link': '复制单集链接',
+        'Link copied': '已复制链接', 'Sleep timer': '睡眠定时', 'Sleep timer off': '睡眠定时已关闭',
+        'Sleep timer · end of track': '睡眠定时 · 歌曲结束时', 'Turn off': '关闭', '‹ Back': '‹ 返回',
+        'End of track': '歌曲结束时', '5 minutes': '5 分钟', '10 minutes': '10 分钟', '15 minutes': '15 分钟', '30 minutes': '30 分钟',
+        '45 minutes': '45 分钟', '1 hour': '1 小时', 'No playlists': '没有歌单',
+        'Lyrics source': '歌词来源', 'Lyrics font…': '歌词字体…', 'Automatic': '自动',
+        'Open in phone view': '以手机视图打开',
+        'Fold lyrics preview': '收起歌词预览', 'Unfold lyrics preview': '展开歌词预览', 'Open as mini player': '以迷你播放器打开',
+        'Couldn’t set the sleep timer': '无法设置睡眠定时', 'Couldn’t add to playlist': '无法添加到歌单',
+        'Couldn’t change following': '无法更改关注状态', 'Window sizes reset': '已重置窗口大小',
+        'Lyrics source: automatic': '歌词来源：自动',
+        // Settings
+        'Full screen': '全屏', 'Lyrics only': '仅歌词', 'Background': '背景', 'Movement speed': '动态速度', 'Still': '静止',
+        'Expanded view': '放大视图', 'Animated covers': '动态封面 (Canvas)', 'Center lyrics': '歌词居中',
+        'Pronunciation · Japanese': '罗马音 · 日语', 'Pronunciation · English': '发音 · 英语', 'Furigana': '假名注音',
+        'Translation': '翻译', 'Translate lyrics': '翻译歌词', 'Gemini API key': 'Gemini API 密钥', 'optional': '可选',
+        'Lyrics size': '歌词大小', 'Change…': '更改…', 'Timing for this song': '此歌曲的时间',
+        'Auto-hide controls': '自动隐藏控件', 'Compact': '紧凑', 'Expanded': '放大', 'Lyric sources': '歌词来源',
+        'Word-by-word sync': '逐字同步', 'Musixmatch token': 'Musixmatch 令牌', 'Window': '窗口', 'Window sizes': '窗口大小',
+        'Language': '语言', 'Updates': '更新', 'Check for updates': '检查更新', 'Check': '检查',
+        'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': '隐藏封面和控件。空格键播放/暂停，方向键前进或后退 5 秒。',
+        'Spotify\'s looping video for songs that have one. Other songs keep the cover.': '有 Canvas 视频的歌曲显示视频，其他歌曲显示封面。',
+        'Controls fade after a few seconds without the mouse moving, and come back when it does.': '鼠标几秒不动时控件会隐藏，移动鼠标后重新出现。',
+        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, Lyrically, NetEase and Musixmatch are the ones that carry word timings. When none has them, word timings are estimated from the line.': '按从上到下的顺序查找。逐字时间来自 LyricsPlus、Lyrically (Apple Music)、NetEase 和 Musixmatch。都没有时，按行长度估算。',
+        'Estimate when missing': '缺失时估算', 'line synced · estimated': '逐行同步 · 估算',
+        'Each view remembers the size you resize it to. Reset puts them all back.': '每个视图都会记住调整后的窗口大小。重置后恢复默认大小。',
+        'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '每首歌只翻译一次，并与歌词一起保存。可在 Google AI Studio 免费获取密钥。',
+        'Applies the next time the player opens.': '下次打开播放器时生效。',
+        // Font panel
+        'Full lyrics background': '完整歌词背景', 'Auto': '自动', 'Color': '纯色', 'Cover': '封面', 'Canvas': 'Canvas',
+        'Weight': '粗细', 'Default': '默认', 'Regular': '常规', 'Bold': '粗体', 'Heavy': '特粗', 'Size': '大小',
+        'Line spacing': '行距', 'Pronunciation size': '发音大小', 'Translation size': '翻译大小',
+        'System': '系统', 'Rounded': '圆体', 'Handwriting': '手写',
+        // Cards
+        'About the artist': '关于艺人', 'Credits': '制作人员', 'Follow': '关注', 'Following': '已关注',
+        'Main artist': '主要艺人', 'Featured artist': '合作艺人', 'Vocals': '演唱', 'Lyricist': '作词', 'Composer': '作曲',
+        'Arranger': '编曲', 'Producer': '制作人', 'Writer': '词曲作者', 'Performers': '表演者', 'Writers': '词曲作者',
+        'Producers': '制作人', 'Mixing engineer': '混音师', 'Mastering engineer': '母带工程师',
+        // Source status
+        'word synced': '逐字同步', 'line synced': '逐行同步', 'not synced': '未同步', 'not found': '未找到',
+        'searching…': '搜索中…', 'needs token': '需要令牌', 'off': '已关闭', 'not asked': '未查询',
+        // Messages ({0} is filled in)
+        'Playing from {0}': '正在播放：{0}', 'Translation failed: {0}': '翻译失败：{0}',
+        'No update source set yet': '尚未设置更新来源', 'Update {0} available · command copied': '有新版本 {0} · 已复制更新命令',
+        'paste the copied command in a terminal to update': '将复制的命令粘贴到终端即可更新',
+        'Couldn’t check for updates': '无法检查更新', 'Add a Gemini API key': '请添加 Gemini API 密钥',
+    };
+    const ES = {
+        // Player
+        'Loading…': 'Cargando…', 'Now Playing': 'Reproduciendo', 'Unknown': 'Desconocido',
+        'Play': 'Reproducir', 'Pause': 'Pausar', 'Previous': 'Anterior', 'Next': 'Siguiente', 'Volume': 'Volumen', 'Mute': 'Silenciar',
+        'More': 'Más', 'More options': 'Más opciones', 'Lyrics': 'Letra', 'Lyrics preview': 'Vista previa de la letra', 'Full lyrics': 'Letra completa',
+        'Playing Next': 'Cola de reproducción', 'Close player': 'Cerrar reproductor', 'Expand': 'Ampliar', 'Back to mini player': 'Volver al minirreproductor',
+        'Back': 'Atrás', 'Cover view': 'Vista de portada', 'Phone view': 'Vista móvil', 'Settings': 'Ajustes', 'Done': 'Listo', 'Reset': 'Restablecer',
+        'Shuffle': 'Aleatorio', 'Shuffle on': 'Aleatorio activado', 'Smart shuffle': 'Aleatorio inteligente', 'Smart': 'Inteligente',
+        'Repeat': 'Repetir', 'Repeat all': 'Repetir todo', 'Repeat one': 'Repetir una', 'Timer': 'Temporizador',
+        'Not available during autoplay': 'No disponible durante la reproducción automática', 'Not available for this music': 'No disponible para esta música',
+        'Save to Liked Songs': 'Guardar en Canciones que te gustan', 'Remove from Liked Songs': 'Eliminar de Canciones que te gustan',
+        'Liked Songs': 'Canciones que te gustan', 'Your Episodes': 'Tus episodios',
+        'Lyrics earlier': 'Adelantar letra', 'Lyrics later': 'Retrasar letra', 'Lyrics timing': 'Sincronía de la letra', 'Lyrics font': 'Fuente de la letra',
+        'Queue': 'Cola', 'Up Next': 'A continuación', 'Nothing up next': 'No hay nada a continuación', 'No lyrics available': 'No hay letra disponible',
+        // Menu
+        'Add to Playlist': 'Añadir a playlist', 'Go to Album': 'Ir al álbum', 'Go to Artist': 'Ir al artista',
+        'Go to Show': 'Ir al pódcast', 'Copy Song Link': 'Copiar enlace de la canción', 'Copy Episode Link': 'Copiar enlace del episodio',
+        'Link copied': 'Enlace copiado', 'Sleep timer': 'Temporizador', 'Sleep timer off': 'Temporizador desactivado',
+        'Sleep timer · end of track': 'Temporizador · al final de la canción', 'Turn off': 'Desactivar', '‹ Back': '‹ Atrás',
+        'End of track': 'Al final de la canción', '5 minutes': '5 minutos', '10 minutes': '10 minutos', '15 minutes': '15 minutos', '30 minutes': '30 minutos',
+        '45 minutes': '45 minutos', '1 hour': '1 hora', 'No playlists': 'No hay playlists',
+        'Lyrics source': 'Fuente de la letra', 'Lyrics font…': 'Fuente de la letra…', 'Automatic': 'Automático',
+        'Open in phone view': 'Abrir en vista móvil',
+        'Fold lyrics preview': 'Plegar vista previa de la letra', 'Unfold lyrics preview': 'Desplegar vista previa de la letra', 'Open as mini player': 'Abrir como minirreproductor',
+        'Couldn’t set the sleep timer': 'No se pudo configurar el temporizador', 'Couldn’t add to playlist': 'No se pudo añadir a la playlist',
+        'Couldn’t change following': 'No se pudo cambiar el seguimiento', 'Window sizes reset': 'Tamaños de ventana restablecidos',
+        'Lyrics source: automatic': 'Fuente de la letra: automática',
+        // Settings
+        'Full screen': 'Pantalla completa', 'Lyrics only': 'Solo letra', 'Background': 'Fondo', 'Movement speed': 'Velocidad del movimiento', 'Still': 'Quieto',
+        'Expanded view': 'Vista ampliada', 'Animated covers': 'Portadas animadas (Canvas)', 'Center lyrics': 'Centrar letra',
+        'Pronunciation · Japanese': 'Romaji · japonés', 'Pronunciation · English': 'Pronunciación · inglés', 'Furigana': 'Furigana (lectura de kanji)',
+        'Translation': 'Traducción', 'Translate lyrics': 'Traducir letra', 'Gemini API key': 'Clave de API de Gemini', 'optional': 'opcional',
+        'Lyrics size': 'Tamaño de la letra', 'Change…': 'Cambiar…', 'Timing for this song': 'Sincronía de esta canción',
+        'Auto-hide controls': 'Ocultar controles automáticamente', 'Compact': 'Compacto', 'Expanded': 'Ampliado', 'Lyric sources': 'Fuentes de letras',
+        'Word-by-word sync': 'Sincronía por palabra', 'Musixmatch token': 'Token de Musixmatch', 'Window': 'Ventana', 'Window sizes': 'Tamaños de ventana',
+        'Language': 'Idioma', 'Updates': 'Actualizaciones', 'Check for updates': 'Buscar actualizaciones', 'Check': 'Buscar',
+        'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': 'Oculta la portada y los controles. Espacio reproduce y pausa; las flechas saltan 5 segundos.',
+        'Spotify\'s looping video for songs that have one. Other songs keep the cover.': 'Muestra el vídeo Canvas de Spotify en las canciones que lo tienen; las demás muestran la portada.',
+        'Controls fade after a few seconds without the mouse moving, and come back when it does.': 'Los controles desaparecen tras unos segundos sin mover el ratón y vuelven al moverlo.',
+        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, Lyrically, NetEase and Musixmatch are the ones that carry word timings. When none has them, word timings are estimated from the line.': 'Se buscan de arriba abajo hasta encontrar letra sincronizada. LyricsPlus, Lyrically (Apple Music), NetEase y Musixmatch tienen sincronía por palabra. Si ninguna la tiene, se estima a partir de la línea.',
+        'Estimate when missing': 'Estimar si falta', 'line synced · estimated': 'sincronía por línea · estimada',
+        'Each view remembers the size you resize it to. Reset puts them all back.': 'Cada vista recuerda el tamaño que le diste. Restablecer vuelve al tamaño predeterminado.',
+        'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': 'Cada canción se traduce una vez y se guarda con la letra. Consigue una clave gratis en Google AI Studio.',
+        'Applies the next time the player opens.': 'Se aplica la próxima vez que abras el reproductor.',
+        // Font panel
+        'Full lyrics background': 'Fondo de la letra completa', 'Auto': 'Auto', 'Color': 'Color', 'Cover': 'Portada', 'Canvas': 'Canvas',
+        'Weight': 'Grosor', 'Default': 'Predeterminado', 'Regular': 'Normal', 'Bold': 'Negrita', 'Heavy': 'Muy gruesa', 'Size': 'Tamaño',
+        'Line spacing': 'Interlineado', 'Pronunciation size': 'Tamaño de la pronunciación', 'Translation size': 'Tamaño de la traducción',
+        'System': 'Sistema', 'Rounded': 'Redondeada', 'Handwriting': 'Manuscrita',
+        // Cards
+        'About the artist': 'Acerca del artista', 'Credits': 'Créditos', 'Follow': 'Seguir', 'Following': 'Siguiendo',
+        'Main artist': 'Artista principal', 'Featured artist': 'Artista invitado', 'Vocals': 'Voz', 'Lyricist': 'Letrista', 'Composer': 'Compositor',
+        'Arranger': 'Arreglista', 'Producer': 'Productor', 'Writer': 'Autor', 'Performers': 'Intérpretes', 'Writers': 'Autores',
+        'Producers': 'Productores', 'Mixing engineer': 'Ingeniero de mezcla', 'Mastering engineer': 'Ingeniero de masterización',
+        // Source status
+        'word synced': 'sincronía por palabra', 'line synced': 'sincronía por línea', 'not synced': 'sin sincronía', 'not found': 'no encontrada',
+        'searching…': 'buscando…', 'needs token': 'requiere token', 'off': 'desactivada', 'not asked': 'sin consultar',
+        // Messages ({0} is filled in)
+        'Playing from {0}': 'Reproduciendo desde {0}', 'Translation failed: {0}': 'Error al traducir: {0}',
+        'No update source set yet': 'Aún no hay fuente de actualizaciones', 'Update {0} available · command copied': 'Versión {0} disponible · comando copiado',
+        'paste the copied command in a terminal to update': 'pega el comando copiado en una terminal para actualizar',
+        'Couldn’t check for updates': 'No se pudieron buscar actualizaciones', 'Add a Gemini API key': 'Añade una clave de API de Gemini',
+    };
+    const L10N = { ko: KO, ja: JA, zh: ZH, es: ES };
+    // [pattern, (match, language) -> values for {0} {1}…, templates]; no templates: the function
+    // returns the finished string.
+    const L10N_RE = [
+        [/^Saved to (.+)$/, (m, l) => [tr(m[1], l)], { ko: '{0}에 저장했습니다', ja: '{0}に保存しました', zh: '已保存到{0}', es: 'Guardado en {0}' }],
+        [/^Removed from (.+)$/, (m, l) => [tr(m[1], l)], { ko: '{0}에서 삭제했습니다', ja: '{0}から削除しました', zh: '已从{0}中移除', es: 'Eliminado de {0}' }],
+        [/^Remove from (.+)$/, (m, l) => [tr(m[1], l)], { ko: '{0}에서 삭제', ja: '{0}から削除', zh: '从{0}中移除', es: 'Eliminar de {0}' }],
+        [/^Save to (.+)$/, (m, l) => [tr(m[1], l)], { ko: '{0}에 저장', ja: '{0}に保存', zh: '保存到{0}', es: 'Guardar en {0}' }],
+        [/^Added to (.+)$/, m => [m[1]], { ko: '{0}에 추가했습니다', ja: '{0}に追加しました', zh: '已添加到{0}', es: 'Añadido a {0}' }],
+        [/^Volume (\d+)%$/, m => [m[1]], { ko: '볼륨 {0}%', ja: '音量 {0}%', zh: '音量 {0}%', es: 'Volumen {0}%' }],
+        [/^Sleep timer · (\d+) min$/, m => [m[1]], { ko: '수면 타이머 · {0}분', ja: 'スリープタイマー · {0}分', zh: '睡眠定时 · {0} 分钟', es: 'Temporizador · {0} min' }],
+        [/^Sleep timer: (.+)$/, (m, l) => [tr(m[1].replace(/^./, c => c.toUpperCase()), l)], { ko: '수면 타이머: {0}', ja: 'スリープタイマー: {0}', zh: '睡眠定时：{0}', es: 'Temporizador: {0}' }],
+        [/^Lyrics from (.+) for this song$/, m => [m[1]], { ko: '이 곡은 {0} 가사를 사용합니다', ja: 'この曲は {0} の歌詞を使用します', zh: '此歌曲使用 {0} 的歌词', es: 'Esta canción usa la letra de {0}' }],
+        [/^([\d,.]+) monthly listeners$/, m => [m[1]], { ko: '월별 청취자 {0}명', ja: '月間リスナー {0}人', zh: '每月听众 {0} 人', es: '{0} oyentes mensuales' }],
+        [/^(✓ )?Automatic(?: \((.+)\))?$/, (m, l) => `${m[1] || ''}${tr('Automatic', l)}${m[2] ? ` (${m[2]})` : ''}`],
+        [/^(✓ )?(LyricsPlus|Lyrically|Spotify|LRCLIB|NetEase|Musixmatch) · (.+?)( \(.+\))?$/, (m, l) => `${m[1] || ''}${m[2]} · ${tr(m[3], l)}${m[4] || ''}`],
+        [/^(.+ • .+)$/, (m, l) => m[1].split(' • ').map(x => tr(x, l)).join(' • ')],
+        [/^Update available: (.+)$/, m => [m[1]], { ko: '새 버전이 있습니다: {0}', ja: '新しいバージョンがあります: {0}', zh: '有新版本：{0}', es: 'Nueva versión disponible: {0}' }],
+        [/^Up to date \((.+)\)$/, m => [m[1]], { ko: '최신 버전입니다 ({0})', ja: '最新バージョンです ({0})', zh: '已是最新版本 ({0})', es: 'Está actualizado ({0})' }],
     ];
-    function tr(str) {
-        if (lang !== 'ko' || !str) return str;
+    const fill = (s, vals) => s.replace(/\{(\d)\}/g, (_, i) => vals[i] ?? '');
+    function tr(str, l = lang) {
+        const table = L10N[l];
+        if (!table || !str) return str;
         const k = String(str).replace(/\s+/g, ' ').trim();
         if (!k) return str;
-        if (KO[k] != null) return KO[k];
-        for (const [re, f] of KO_RE) { const m = k.match(re); if (m) return f(m); }
+        if (table[k] != null) return table[k];
+        for (const [re, f, tpl] of L10N_RE) {
+            const m = k.match(re);
+            if (m) { const r = f(m, l); return tpl ? fill(tpl[l], r) : r; }
+        }
         return str;
     }
+    // A message with values in it: trf('Playing from {0}', name).
+    const trf = (key, ...vals) => fill(tr(key), vals);
 
     /* Runtime state */
 
@@ -872,14 +1077,62 @@
       return out.map(x => typeof x === 'string' ? x : hangul(x.c, x.v, x.j)).join('');
     }
 
+    // Kana -> Hepburn romaji, for readers whose interface isn't Korean.
+    const ROMA = {};
+    [['アイウエオ', ['a', 'i', 'u', 'e', 'o']], ['カキクケコ', ['ka', 'ki', 'ku', 'ke', 'ko']], ['ガギグゲゴ', ['ga', 'gi', 'gu', 'ge', 'go']],
+     ['サシスセソ', ['sa', 'shi', 'su', 'se', 'so']], ['ザジズゼゾ', ['za', 'ji', 'zu', 'ze', 'zo']], ['タチツテト', ['ta', 'chi', 'tsu', 'te', 'to']],
+     ['ダヂヅデド', ['da', 'ji', 'zu', 'de', 'do']], ['ナニヌネノ', ['na', 'ni', 'nu', 'ne', 'no']], ['ハヒフヘホ', ['ha', 'hi', 'fu', 'he', 'ho']],
+     ['バビブベボ', ['ba', 'bi', 'bu', 'be', 'bo']], ['パピプペポ', ['pa', 'pi', 'pu', 'pe', 'po']], ['マミムメモ', ['ma', 'mi', 'mu', 'me', 'mo']],
+     ['ヤユヨ', ['ya', 'yu', 'yo']], ['ラリルレロ', ['ra', 'ri', 'ru', 're', 'ro']], ['ワヰヱヲ', ['wa', 'i', 'e', 'o']],
+     ['ァィゥェォ', ['a', 'i', 'u', 'e', 'o']], ['ヴ', ['vu']]]
+        .forEach(([row, rs]) => [...row].forEach((k, i) => { ROMA[k] = rs[i]; }));
+    const ROMA_Y = { 'ャ': 'a', 'ュ': 'u', 'ョ': 'o' }, ROMA_V = { 'ァ': 'a', 'ィ': 'i', 'ゥ': 'u', 'ェ': 'e', 'ォ': 'o' };
+    const MACRON = { a: 'ā', i: 'ī', u: 'ū', e: 'ē', o: 'ō' };
+    function kanaRoman(input) {
+      const s = toKata(input);
+      let out = '', last = '', dbl = false;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (ch === 'ッ') { dbl = true; continue; }
+        if (ch === 'ン') { out += 'n'; last = ''; continue; }
+        // Long vowel mark: ハッピー happī.
+        if (ch === 'ー') { out = out.replace(/[aiueo]$/, v => MACRON[v]); last = ''; continue; }
+        // Small ya/yu/yo after an -i syllable: キャ kya, シャ sha, ジョ jo.
+        if (last.endsWith('i') && ROMA_Y[ch]) {
+          const base = /^(sh|ch|j)i$/.test(last) ? last.slice(0, -1) : last.slice(0, -1) + 'y';
+          out = out.slice(0, -last.length) + base + ROMA_Y[ch];
+          last = '';
+          continue;
+        }
+        // Small vowels: ファ fa, ティ ti, ウィ wi, シェ she.
+        if (last && ROMA_V[ch]) {
+          const base = last === 'u' ? 'w' : /^(sh|ch|j)i$/.test(last) ? last.slice(0, -1) : last.replace(/[aiueo]$/, '');
+          out = out.slice(0, -last.length) + base + ROMA_V[ch];
+          last = '';
+          continue;
+        }
+        const r = ROMA[ch];
+        if (!r) { out += ch; last = ''; dbl = false; continue; }
+        out += dbl ? (r.startsWith('ch') ? 't' : r[0]) + r : r;
+        last = r;
+        dbl = false;
+      }
+      return out;
+    }
+    // A token's romaji: the kana as written (キョウ kyou), with particles read as spoken.
+    const PARTICLE = { 'は': 'wa', 'へ': 'e', 'を': 'o' };
+    const tokRoman = t => (t.pos === '助詞' && PARTICLE[t.surface_form]) || kanaRoman(t.reading && t.reading !== '*' ? t.reading : t.surface_form);
+
     // Words that start a new spaced chunk (Apple-style: roughly per bunsetsu).
     const INDEP = new Set(['名詞', '動詞', '形容詞', '副詞', '連体詞', '接続詞', '感動詞', '接頭詞']);
-    function linePron(tokens, dict) {
+    // roman: romaji instead of Hangul (and Latin words stay as they are).
+    function linePron(tokens, dict, roman = false) {
       let out = '', prevPos = null;
       for (const t of tokens) {
         if (/^\s+$/.test(t.surface_form)) { out += ' '; prevPos = null; continue; }
         const jp = /[぀-ヿ㐀-鿿々〆ヶ]/.test(t.surface_form);
-        const p = jp ? kataToHangul(t.pronunciation || t.reading || t.surface_form) : (dict ? enText(t.surface_form, dict) : t.surface_form);
+        const p = jp ? (roman ? tokRoman(t) : kataToHangul(t.pronunciation || t.reading || t.surface_form))
+            : (dict && !roman ? enText(t.surface_form, dict) : t.surface_form);
         const indep = INDEP.has(t.pos) && t.pos_detail_1 !== '非自立' && t.pos_detail_1 !== '接尾';
         // A new chunk starts at an independent word, except inside compounds
         // (noun+noun, verb+verb) and after a prefix.
@@ -1028,6 +1281,14 @@
     }
 
     const RE_KANA = /[\u3040-\u30ff]/, RE_JP = /[\u3040-\u30ff\u3400-\u9fff々〆ヶ]/, RE_LATIN = /[A-Za-z]/, RE_HANGUL = /[\uac00-\ud7a3]/;
+    const RE_HAN = /[\u3400-\u9fff]/;
+    // Lyrics already in the interface language need no translation.
+    const LANG_SCRIPT = { ko: t => RE_HANGUL.test(t), ja: t => RE_KANA.test(t), zh: t => RE_HAN.test(t) && !RE_KANA.test(t) };
+    const LANG_NAMES = { ko: 'Korean', en: 'English', ja: 'Japanese', zh: 'Simplified Chinese', es: 'Spanish' };
+    // Pronunciation is written for the reader: Hangul for a Korean interface, romaji for the
+    // others. English lines only get it in Hangul; Japanese readers don't need it for Japanese.
+    const doPronJa = () => pronJa && lang !== 'ja';
+    const doPronEn = () => pronEn && lang === 'ko';
 
     // Adds .pron to each line that needs one. Returns true if anything changed.
     // Furigana for one line: [{s, e, rt}] character ranges in the line's text. Kana the word
@@ -1067,12 +1328,13 @@
     }
 
     async function addPron(result) {
-        const key = `${pronJa}${pronEn}${furiOn}`;
+        const pj = doPronJa(), pe = doPronEn();
+        const key = `${pj}${pe}${furiOn}${lang}`;
         if (!result?.lines?.length || result.pronKey === key) return false;
         const lines = result.lines;
         // Kanji without any kana is Chinese, not Japanese.
-        const ja = (pronJa || furiOn) && lines.some(l => RE_KANA.test(l.text));
-        const en = pronEn && lines.some(l => RE_LATIN.test(l.text));
+        const ja = (pj || furiOn) && lines.some(l => RE_KANA.test(l.text));
+        const en = pe && lines.some(l => RE_LATIN.test(l.text));
         const [tk, dict] = await Promise.all([ja ? loadKuromoji() : null, en ? loadCmu() : null]);
         for (const l of lines) {
             l.pron = null;
@@ -1082,7 +1344,7 @@
             if (tk && RE_JP.test(l.text)) {
                 const toks = tk.tokenize(l.text);
                 if (furiOn) l.furi = lineFuri(toks);
-                if (pronJa) p = linePron(toks, dict);
+                if (pj) p = linePron(toks, dict, lang !== 'ko');
             }
             else if (dict && RE_LATIN.test(l.text)) p = enText(l.text, dict).replace(/\s+/g, ' ').trim();
             if (p && p !== l.text && !(p === l.text.replace(/[,.!?]/g, ''))) l.pron = p;
@@ -1097,9 +1359,10 @@
     const GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-flash-latest', 'gemini-2.5-flash-lite'];
     let geminiModel = null;   // the first model that worked for this key
     async function geminiTranslate(texts) {
-        const prompt = 'Translate these song lyrics into natural, singable Korean. Keep the meaning and tone; ' +
-            'do not add explanations. Return a JSON array with exactly one Korean string per input line, in order. ' +
-            'Lines already in Korean stay as they are.\n\n' + JSON.stringify(texts);
+        const to = LANG_NAMES[lang] || 'English';
+        const prompt = `Translate these song lyrics into natural, singable ${to}. Keep the meaning and tone; ` +
+            `do not add explanations. Return a JSON array with exactly one ${to} string per input line, in order. ` +
+            `Lines already in ${to} stay as they are.\n\n` + JSON.stringify(texts);
         const body = JSON.stringify({
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             generationConfig: { responseMimeType: 'application/json', temperature: 0.3 },
@@ -1125,17 +1388,22 @@
     const transInflight = new WeakMap();
     async function addTrans(result) {
         if (!transOn || !gemKey || !result?.lines?.length) return false;
-        if (result.trans === 'ko') return false;
+        if (result.trans === lang) return false;
         const lines = result.lines.filter(l => !l.dots && l.text);
         // Mostly Korean already: nothing to do.
-        if (lines.filter(l => RE_HANGUL.test(l.text)).length > lines.length / 2) { result.trans = 'ko'; return false; }
+        const own = LANG_SCRIPT[lang];
+        if (own && lines.filter(l => own(l.text)).length > lines.length / 2) {
+            for (const l of lines) l.trans = null;
+            result.trans = lang;
+            return true;
+        }
         if (transInflight.has(result)) return transInflight.get(result);
         const job = (async () => {
             const uniq = [...new Set(lines.map(l => l.text))];
             const out = await geminiTranslate(uniq);
             const map = new Map(uniq.map((t, i) => [t, out[i] || '']));
             for (const l of lines) { const k = map.get(l.text); l.trans = k && k !== l.text ? k : null; }
-            result.trans = 'ko';
+            result.trans = lang;
             return true;
         })().finally(() => transInflight.delete(result));
         transInflight.set(result, job);
@@ -2206,8 +2474,8 @@
         <div class="stitle">Lyrics</div>
         <div class="scard">
           <div class="sr"><span class="slbl">Center lyrics</span><div class="tog ${centerLyrics?'on':''}" id="togCenter"></div></div>
-          <div class="sr"><span class="slbl">Pronunciation · Japanese</span><div class="tog ${pronJa?'on':''}" id="togPronJa"></div></div>
-          <div class="sr"><span class="slbl">Pronunciation · English</span><div class="tog ${pronEn?'on':''}" id="togPronEn"></div></div>
+          <div class="sr"${lang === 'ja' ? ' style="display:none"' : ''}><span class="slbl">Pronunciation · Japanese</span><div class="tog ${pronJa?'on':''}" id="togPronJa"></div></div>
+          <div class="sr"${lang !== 'ko' ? ' style="display:none"' : ''}><span class="slbl">Pronunciation · English</span><div class="tog ${pronEn?'on':''}" id="togPronEn"></div></div>
           <div class="sr"><span class="slbl">Furigana</span><div class="tog ${furiOn?'on':''}" id="togFuri"></div></div>
           <div class="sr"><span class="slbl">Lyrics font</span><button class="sbtn" id="sFont">Change…</button></div>
           <div class="sr"><span class="slbl">Lyrics size</span>
@@ -2244,9 +2512,8 @@
         <div class="scard">
           <div class="sr"><span class="slbl">Language</span>
             <select class="ssel" id="langSel" data-raw>
-              <option value="auto"${langPref() === 'auto' ? ' selected' : ''}>Auto · 자동</option>
-              <option value="ko"${langPref() === 'ko' ? ' selected' : ''}>한국어</option>
-              <option value="en"${langPref() === 'en' ? ' selected' : ''}>English</option>
+              ${[['auto', 'Auto'], ['ko', '한국어'], ['en', 'English'], ['ja', '日本語'], ['zh', '简体中文'], ['es', 'Español']].map(([v, t]) =>
+                `<option value="${v}"${langPref() === v ? ' selected' : ''}>${t}</option>`).join('')}
             </select></div>
         </div>
         <div class="shint">Applies the next time the player opens.</div>
@@ -2399,7 +2666,7 @@
         const RAW = '.lyric,#lyrScroll,#mLine,.ttl,.sub,.mmt,.mms,.qn,.qa,.cn,.aname,.abio,[data-raw],#offVal,.tm,#vPct,.fsval,.stok,#qFrom b,.prow .slbl';
         const ATTRS = ['title', 'aria-label', 'placeholder'];
         function i18n(node) {
-            if (lang !== 'ko' || !node) return;
+            if (lang === 'en' || !node) return;
             if (node.nodeType === 3) {
                 if (node.parentElement?.closest(RAW)) return;
                 const v = tr(node.nodeValue);
@@ -2419,8 +2686,8 @@
                 }
             }
         }
-        if (lang === 'ko') {
-            doc.documentElement.lang = 'ko';
+        if (lang !== 'en') {
+            doc.documentElement.lang = lang === 'zh' ? 'zh-CN' : lang;
             i18n(body);
             new win.MutationObserver(muts => {
                 for (const m of muts) {
@@ -2577,7 +2844,7 @@
             const home = !panel || panel === 'queue';
             el.mTitle.textContent = panel === 'settings' ? 'Settings' : panel === 'lyrics' ? 'Lyrics' : ctxName || 'Now Playing';
             el.mTitle.style.textTransform = home && ctxName ? 'none' : '';
-            el.qFrom.innerHTML = !ctxName ? '' : lang === 'ko' ? `<b>${esc(ctxName)}</b> 재생 중에서` : `Playing from <b>${esc(ctxName)}</b>`;
+            el.qFrom.innerHTML = !ctxName ? '' : trf('Playing from {0}', `<b>${esc(ctxName)}</b>`);
         }
 
         const setMode = m => {
@@ -3107,7 +3374,7 @@ void main() {
             if (await addPron(res)) redraw();
             let changed = false;
             try { changed = await addTrans(res); }
-            catch (e) { if (token === lyricReq) toast(lang === 'ko' ? `번역 실패: ${e.message}` : `Translation failed: ${e.message}`); }
+            catch (e) { if (token === lyricReq) toast(trf('Translation failed: {0}', e.message)); }
             if (changed) {
                 redraw();
                 if (set && uri) idbPut(uri, set.results);
@@ -3939,7 +4206,7 @@ void main() {
             return false;
         };
         async function checkUpdate(manual) {
-            if (REPO.includes('__')) { if (manual) toast(lang === 'ko' ? '업데이트 저장소가 아직 설정되지 않았습니다' : 'No update source set yet'); return; }
+            if (REPO.includes('__')) { if (manual) toast(tr('No update source set yet')); return; }
             try {
                 localStorage.setItem('wp7-upd-at', Date.now());
                 const txt = await (await fetch(`https://raw.githubusercontent.com/${REPO}/main/waveplayer-mobile.js`, { cache: 'no-store' })).text();
@@ -3950,10 +4217,10 @@ void main() {
                         ? `curl -fsSL https://raw.githubusercontent.com/${REPO}/main/install.sh | sh`
                         : `iwr -useb https://raw.githubusercontent.com/${REPO}/main/install.ps1 | iex`;
                     try { P.ClipboardAPI.copy(cmd); } catch {}
-                    toast(lang === 'ko' ? `새 버전 ${v} · 업데이트 명령을 복사했습니다` : `Update ${v} available · command copied`);
-                    try { Spicetify.showNotification(`Wave Player Mobile ${v}: ${lang === 'ko' ? '터미널에 붙여넣어 업데이트하세요' : 'paste the copied command in a terminal to update'}`); } catch {}
+                    toast(trf('Update {0} available · command copied', v));
+                    try { Spicetify.showNotification(`Wave Player Mobile ${v}: ${tr('paste the copied command in a terminal to update')}`); } catch {}
                 } else if (manual) toast(`Up to date (v${MOBILE_VERSION})`);
-            } catch { if (manual) toast(lang === 'ko' ? '업데이트를 확인하지 못했습니다' : 'Couldn’t check for updates'); }
+            } catch { if (manual) toast(tr('Couldn’t check for updates')); }
         }
         el.updBtn.onclick = () => checkUpdate(true);
         // Once a day, quietly.
@@ -3977,7 +4244,7 @@ void main() {
         };
         el.langSel.onchange = e => {
             try { localStorage.setItem('wp7-lang', e.target.value); } catch {}
-            toast(e.target.value === 'en' ? 'Applies the next time the player opens.' : '플레이어를 다시 열면 적용됩니다.');
+            toast(tr('Applies the next time the player opens.', pickLang()));
         };
         el.togCenter.onclick = () => {
             centerLyrics = !centerLyrics;
@@ -4011,7 +4278,7 @@ void main() {
             transOn = !transOn;
             el.togTrans.classList.toggle('on', transOn);
             localStorage.setItem('wp7-trans', transOn);
-            if (transOn && !gemKey) toast(lang === 'ko' ? 'Gemini API 키를 넣어주세요' : 'Add a Gemini API key');
+            if (transOn && !gemKey) toast(tr('Add a Gemini API key'));
             renderLyrics(); lyr.idx = -1; updateLyrics(lyrPos());
             refreshPron();
         };
