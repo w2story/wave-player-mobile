@@ -1,10 +1,10 @@
 #!/bin/sh
 # Wave Player Mobile — install or update (macOS / Linux)
-#   curl -fsSL https://raw.githubusercontent.com/__REPO__/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/w2story/wave-player-mobile/main/install.sh | sh
 # Running it again updates to the latest version.
 
 set -e
-REPO='__REPO__'
+REPO='w2story/wave-player-mobile'
 FILE='waveplayer-mobile.js'
 
 printf '\n\033[32mWave Player Mobile\033[0m\n'

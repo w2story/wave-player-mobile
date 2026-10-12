@@ -1,9 +1,9 @@
 # Wave Player Mobile — install or update (Windows)
-#   iwr -useb https://raw.githubusercontent.com/__REPO__/main/install.ps1 | iex
+#   iwr -useb https://raw.githubusercontent.com/w2story/wave-player-mobile/main/install.ps1 | iex
 # Running it again updates to the latest version.
 
 $ErrorActionPreference = 'Stop'
-$Repo = '__REPO__'
+$Repo = 'w2story/wave-player-mobile'
 $File = 'waveplayer-mobile.js'
 
 Write-Host "`nWave Player Mobile" -ForegroundColor Green

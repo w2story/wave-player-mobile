@@ -29,7 +29,7 @@
     const VERSION = 'v3';
     // This edition (phone view, translation, …): its own version and where updates come from.
     const MOBILE_VERSION = '1.0.0';
-    const REPO = '__REPO__';
+    const REPO = 'w2story/wave-player-mobile';
 
     const CHANGELOG = [
         {

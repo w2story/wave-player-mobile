@@ -27,13 +27,13 @@ Spotify 데스크톱 앱이 필요합니다. 아래 명령은 Spicetify가 없�
 **Windows (PowerShell)**
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/__REPO__/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/w2story/wave-player-mobile/main/install.ps1 | iex
 ```
 
 **macOS / Linux (터미널)**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/__REPO__/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/w2story/wave-player-mobile/main/install.sh | sh
 ```
 
 ### 직접 설치
