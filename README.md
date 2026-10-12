@@ -1,76 +1,80 @@
-# Wave Player
+# Wave Player Mobile
 
-Please ⭐ the project so more people find Wave Player!
+Spotify 데스크톱 앱에서 **모바일 스포티파이 화면**을 그대로 쓰는 미니 플레이어입니다.
+[Wave Player](https://github.com/03x1/Wave-Player)(Spicetify 확장)를 바탕으로 만들었습니다.
 
-Check out the **[live demo](https://03x1.github.io/Wave-Player/)**
+![폰 화면](docs/phone-view.png)
 
-![Preview](thumbnail.png)
+## 주요 기능
 
-# An Apple Music–style Miniplayer for Spotify
+- **폰 화면**: 캔버스 영상이나 앨범 커버, 현재 가사 한 줄, 진행바와 컨트롤, 가사 미리 보기 카드로 구성됩니다. 미니 플레이어를 열면 기본으로 이 화면이 나옵니다.
+- **캔버스 ↔ 커버 전환**: 앨범 표지를 누를 때마다 캔버스 영상과 커버를 오갑니다. 영상 하단 색을 추출해 배경과 자연스럽게 이어 줍니다.
+- **가사 전체화면**: 캔버스가 있으면 캔버스를, 없으면 애플뮤직처럼 흐린 커버를 배경으로 씁니다. 단색 배경도 고를 수 있습니다.
+- **음절 싱크**: 부르는 음절이 살짝 커지면서 채워집니다. 전주와 간주에는 `• • •`가 표시됩니다.
+- **한글 발음**: 일본어(kuromoji)와 영어(CMU 발음사전) 가사 아래에 한글 발음을 붙입니다. 발음 줄도 음절에 맞춰 채워집니다.
+- **후리가나**: 한자 위에 히라가나 읽기를 표시합니다.
+- **AI 번역**: Gemini API 키를 넣으면 가사 아래에 한국어 번역이 붙습니다. 곡마다 한 번 번역해서 저장합니다.
+- **가사 출처**: Spotify, LRCLIB, LyricsPlus(Apple Music 음절 가사), NetEase, Musixmatch에 동시에 요청하고 가장 좋은 가사를 고릅니다. 곡마다 출처를 직접 고정할 수도 있습니다. 한 번 받은 가사는 디스크에 저장돼 다음부터 바로 나옵니다.
+- **기타**: 재생목록 시트, 아티스트·크레딧 카드, 가사 글꼴 설정(Aa), 가사 미리 보기 접기, 한국어/영어 UI, 곡 링크 복사를 지원합니다.
 
-A small, beautiful player that floats **on top of everything**, modelled on Apple Music's mini player.
+![가사 전체화면](docs/full-lyrics.png)
 
-## Two Sizes
+## 설치
 
-**Compact** for the corner of your screen: artwork, title, progress and controls in one strip. **Expanded** lets the artwork fill the window, with the controls laid over it. The expand button switches between them. The player reopens where you left it, and each view remembers the size you give it.
+Spotify 데스크톱 앱이 필요합니다. 아래 명령은 Spicetify가 없으면 함께 설치합니다.
+같은 명령을 다시 실행하면 최신 버전으로 업데이트됩니다.
 
-Songs with an animated cover (Spotify's Canvas) play it in the expanded view, just like on your phone. You can switch that off in Settings.
+**Windows (PowerShell)**
 
-## Full Screen
+```powershell
+iwr -useb https://raw.githubusercontent.com/__REPO__/main/install.ps1 | iex
+```
 
-Spotify's full screen button opens Wave Player full screen instead: a big cover with the controls under it, and the lyrics beside it. Shuffle, repeat and a volume slider sit under the controls, and Lyrics and Settings in the corner. Switch on **Lyrics only** in Settings to hide the cover and controls and just show the lyrics. Close it with ✕ or Esc.
+**macOS / Linux (터미널)**
 
-## Colours From the Artwork
+```sh
+curl -fsSL https://raw.githubusercontent.com/__REPO__/main/install.sh | sh
+```
 
-The background is made from the cover itself: its colours, blurred and swirling slowly behind the player, so every song gets its own look. In the expanded view the artwork fills the window instead.
+### 직접 설치
 
-## Synced Lyrics
+1. Spicetify Marketplace에서 기존 **Wave Player를 제거**합니다. 둘 다 있으면 하나만 동작합니다.
+2. `waveplayer-mobile.js`를 Spicetify 확장 폴더에 넣습니다.
+   - Windows: `%APPDATA%\spicetify\Extensions`
+   - macOS / Linux: `~/.config/spicetify/Extensions`
+3. 아래 명령을 실행합니다.
 
-The lyrics button opens them right in the player. They scroll with the song; the current line stays sharp while the rest gently blur and fade away.
+```sh
+spicetify config extensions waveplayer-mobile.js
+spicetify apply
+```
 
-Where the source has word timings, each word lights up as it's sung. Four sources are tried in order (Spotify, LRCLIB, NetEase and Musixmatch), and you can reorder or switch off any of them in Settings.
+`Config "extensions" unchanged ... already in the list` 경고는 이미 등록돼 있다는 뜻이라 무시해도 됩니다.
 
-If a song's lyrics run early or late, nudge them with the − and + that appear at the bottom (or press `[` and `]`). The fix is remembered for that song.
+## 사용법
 
-## Up Next
+| 동작 | 방법 |
+| --- | --- |
+| 미니 플레이어 열기 | Spotify의 미니 플레이어 버튼 또는 `Ctrl+Shift+M` |
+| 캔버스 ↔ 커버 | 앨범 표지 클릭 |
+| 가사 전체화면 | 가사 미리 보기 카드 클릭, 또는 `L` |
+| 가사 미리 보기 접기/펼치기 | 카드 상단의 ⌄ / ⌃ |
+| 가사 글꼴·배경 | 카드 상단의 **Aa** |
+| 곡 링크 복사 | 초록 체크에 마우스를 올리면 나오는 링크 버튼 |
+| 가사 싱크 보정 | `[` / `]` (곡별 저장) |
+| 폰 화면 ↔ 커버 화면 | `M` |
 
-The list button shows what's queued and what plays next. Click any song to jump to it. Shuffle and repeat live at the top.
+## 알아둘 점
 
-## The ⋯ Menu
+- 미니 플레이어 창은 Spotify에 내장된 Chrome의 제한으로 **화면 높이의 80%까지만** 커집니다.
+- 한글 발음 사전은 처음 쓸 때 한 번 내려받습니다(일본어 약 12MB, 영어 약 5MB).
+- 아티스트·크레딧 카드와 캔버스는 Spotify 앱 내부 API를 쓰기 때문에, Spotify 버전에 따라 동작이 달라질 수 있습니다.
 
-Save to Liked Songs, add to a playlist, go to the album or artist, copy the song link, a **sleep timer**, and **Settings**: background speed, animated covers, lyric sources and size, and auto-hiding controls (separately for compact, expanded and lyrics), and resetting window sizes.
+## 크레딧
 
-Scroll anywhere on the player to change the volume. The volume slider closes by itself once you let go.
+- 원본: [Wave Player](https://github.com/03x1/Wave-Player) (MIT)
+- 가사: [LRCLIB](https://lrclib.net), LyricsPlus(KPoe), NetEase, Musixmatch, Spotify
+- 일본어 읽기: [kuromoji.js](https://github.com/takuyaa/kuromoji.js) · 영어 발음: [CMU Pronouncing Dictionary](https://github.com/words/cmu-pronouncing-dictionary)
+- 번역: Google Gemini API (사용자 본인 키)
 
-## Light on Your PC
-
-The player only updates when something changes. The swirling background is drawn on the GPU at up to 60 frames a second and stops whenever it's covered or the window is hidden.
-
-## Replaces the Spotify Miniplayer
-
-Click Spotify's miniplayer button and Wave Player opens instead (its full screen button opens Wave Player full screen). Close it with the ✕ (or –) button. There's also a topbar button and `Ctrl+Shift+M` if you'd rather not use Spotify's.
-
-![Miniplayer button](miniplayer.png)
-
-## Install
-
-Get it from the **Spicetify Marketplace** — search "Wave Player".
-
-Needs a recent Spotify desktop app (one with Spotify's own miniplayer button).
-
-Or manually: drop `waveplayer.js` into `%APPDATA%\spicetify\Extensions`, then run `spicetify config extensions waveplayer.js` and `spicetify apply`.
-
-Note that `spicetify config extensions` appends, so running it twice registers the extension twice.
-
-## Credits
-
-Big shout out to the projects that inspired Wave Player:
-
-- [Beautiful Lyrics](https://github.com/surfbryce/beautiful-lyrics/) by surfbryce
-- [Spictify Lyric Miniplayer](https://github.com/FO-SS/Spictify-Lyric-Miniplayer) by FO-SS
-- [Spicy Lyrics](https://github.com/Spikerko/spicy-lyrics) by Spikerko
-
-Lyrics come from [LRCLIB](https://lrclib.net), NetEase and Musixmatch alongside Spotify's own.
-
-## Have an Issue/Idea? Open one here on GitHub!
-
+MIT 라이선스입니다. 원본 저작권 표기는 [LICENSE](LICENSE)에 그대로 남아 있습니다.
