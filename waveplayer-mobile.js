@@ -1825,20 +1825,15 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
 
-    /* Window mode: Spotify's window may be wide, so the page keeps a phone-like column, and
-       the space either side is the cover, blurred and dimmed, rather than flat grey. */
-    body.dock{--pw:min(100vw,560px);}
+    /* Window mode: the background (colour or Canvas) fills Spotify's whole window; the
+       content keeps a readable width in the middle. */
+    body.dock{--pw:min(100vw,640px);}
     #dAmb{display:none;}
-    body.dock #dAmb{display:block;position:fixed;inset:-60px;z-index:0;background:#121212 center/cover no-repeat;
-        filter:blur(60px) saturate(1.35) brightness(.42);}
-    body.dock #mbg{left:calc(50% - var(--pw) / 2);right:auto;width:var(--pw);}
-    body.dock{background:#0c0c0c;}
     /* Narrow window: keep the header clear of Spotify's own window buttons. */
     @media (max-width:880px){body.dock #mhead{margin-top:30px;}}
-    body.dock #main,body.dock #mmore{max-width:560px;margin-left:auto;margin-right:auto;}
-    body.dock.canvas:not(.pl):not(.ps) #xbg{left:calc(50% - var(--pw) / 2);right:auto;width:var(--pw);}
-    body.dock.pq #panel{left:calc(50% - min(calc(100vw - 20px),540px) / 2);right:auto;width:min(calc(100vw - 20px),540px);}
-    body.dock #mmini>*{max-width:560px;}
+    body.dock #main,body.dock #mmore{max-width:640px;margin-left:auto;margin-right:auto;}
+    body.dock.canvas:not(.pl):not(.ps) #xbg{--vh:max(100vh, calc(100vw * 16 / 9 * .6));left:0;right:0;width:auto;}
+    body.dock.pq #panel{left:calc(50% - min(calc(100vw - 20px),620px) / 2);right:auto;width:min(calc(100vw - 20px),620px);}
 
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
