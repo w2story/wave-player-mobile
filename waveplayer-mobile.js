@@ -1891,12 +1891,14 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xbg{display:block;inset:0;height:auto;z-index:1;}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) #mbg{display:none;}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xBlur{display:none;}
-    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xArt{display:block;filter:blur(38px) saturate(1.45) brightness(.6);transform:scale(1.3);}
+    body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xArt{display:block;filter:blur(40px) saturate(1.45) brightness(.5);transform:scale(1.3);}
     body.v-mobile.pl.lb-cover #xVid{display:none;}
     body.v-mobile.pl.lb-canvas.canvas #xArt{display:none;}
-    body.v-mobile.pl.lb-canvas.canvas #xVid{height:100%;-webkit-mask-image:none;mask-image:none;filter:brightness(.62) saturate(1.1);}
+    /* Canvas behind the lyrics: blurred too, and scaled up so the blur has no soft edges. */
+    body.v-mobile.pl.lb-canvas.canvas #xVid{height:100%;-webkit-mask-image:none;mask-image:none;
+        filter:blur(22px) saturate(1.3) brightness(.55);transform:scale(1.15);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) #xShade{display:block;
-        background:linear-gradient(180deg,rgba(0,0,0,.45) 0,rgba(0,0,0,.18) 22%,rgba(0,0,0,.18) 70%,rgba(0,0,0,.55) 100%);}
+        background:linear-gradient(180deg,rgba(0,0,0,.6) 0,rgba(0,0,0,.38) 22%,rgba(0,0,0,.38) 70%,rgba(0,0,0,.68) 100%);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas){--dim:rgba(255,255,255,.36);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
