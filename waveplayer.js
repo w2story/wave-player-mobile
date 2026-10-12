@@ -1028,7 +1028,7 @@
     /* Panels: lyrics, Up Next, Settings */
     #panel{display:none;flex:1;min-height:0;margin:14px calc(var(--pad) * -1) 0;position:relative;}
     body.v-panel #panel{display:flex;}
-    .pv{display:none;flex:1;min-height:0;flex-direction:column;}
+    .pv{display:none;flex:1;min-height:0;min-width:0;flex-direction:column;}
     .pv.show{display:flex;}
 
     /* Lyrics */
@@ -1329,8 +1329,8 @@
         background:linear-gradient(#fff,#fff) 0 0/100% 1.6px no-repeat,linear-gradient(#fff,#fff) 0 50%/100% 1.6px no-repeat,
                    linear-gradient(#fff,#fff) 0 100%/100% 1.6px no-repeat;}
     body.v-mobile.pq #qList{padding-bottom:6px;}
-    body.v-mobile.pq #qBar{display:flex;gap:8px;padding:10px 14px 16px;flex:none;}
-    #qBar button{position:relative;flex:1;height:62px;border-radius:12px;background:rgba(255,255,255,.08);display:flex;
+    body.v-mobile.pq #qBar{display:flex;gap:8px;padding:10px 14px 16px;flex:none;min-width:0;}
+    #qBar button{position:relative;flex:1;min-width:0;white-space:nowrap;overflow:hidden;height:62px;border-radius:12px;background:rgba(255,255,255,.08);display:flex;
         flex-direction:column;align-items:center;justify-content:center;gap:5px;font-size:12px;color:rgba(255,255,255,.9);}
     #qBar button:hover{background:rgba(255,255,255,.13);}
     #qBar svg{width:20px;height:20px;}
@@ -1517,7 +1517,7 @@
             await new Promise(r => setTimeout(r, 60));
         }
         try {
-            const sz = mode === 'mobile' ? { w: SZ.mobile.w, h: window.screen.availHeight } : (SZ[mode] || SZ.compact);
+            const sz = mode === 'mobile' ? { w: SZ.mobile.w, h: Math.floor(window.screen.availHeight * 0.8) } : (SZ[mode] || SZ.compact);
             // Ignore the size Chrome remembers from the last PiP window.
             pipWindow = await window.documentPictureInPicture.requestWindow({
                 width: sz.w, height: sz.h, preferInitialWindowPlacement: true,
@@ -1628,9 +1628,12 @@
         let want = null, sizeTimer = null, sizingUntil = 0, saveTimer = null, burst = 0;
         const openedAt = win.performance.now();
         const SIZE_CHECKS = [0, 120, 250, 450, 750, 1200, 2000];
-        // The mobile view is as tall as the screen allows; only its width is remembered.
+        // The mobile view is as tall as allowed; only its width is remembered. Chrome caps
+        // picture-in-picture windows at 80% of the screen's work area, so that's the most it can be.
+        const PIP_MAX = 0.8;
         const target = v => v === 'mobile'
-            ? { w: SZ.mobile.w, h: Math.max(SZ_MIN.mobile.h, win.screen.availHeight - Math.max(0, win.outerHeight - win.innerHeight)) }
+            ? { w: Math.min(SZ.mobile.w, Math.floor(win.screen.availWidth * PIP_MAX)),
+                h: Math.max(SZ_MIN.mobile.h, Math.floor(win.screen.availHeight * PIP_MAX) - Math.max(0, win.outerHeight - win.innerHeight)) }
             : SZ[v];
         function resize(sz) {
             if (full) return;
@@ -2860,7 +2863,7 @@ void main() {
                             const min = SZ_MIN[view];
                             SZ[view] = { w: Math.max(min.w, win.innerWidth), h: Math.max(min.h, win.innerHeight) };
                             localStorage.setItem('wp7-size', JSON.stringify(SZ));
-                        } else if (win.innerWidth !== target(view).w || win.innerHeight !== target(view).h) resize(target(view));
+                        } else if (view !== 'mobile' && (win.innerWidth !== target(view).w || win.innerHeight !== target(view).h)) resize(target(view));
                         burst = 0;
                     }, 400);
                 }
