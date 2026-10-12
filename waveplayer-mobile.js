@@ -1676,7 +1676,7 @@
     #mhead .wb svg{width:20px;height:20px;}
 
     body.v-mobile #top{order:1;display:flex;flex-direction:column;align-items:stretch;gap:0;padding-top:4px;}
-    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - var(--artH,620px))));height:auto;aspect-ratio:1;align-self:center;
+    body.v-mobile #artBox{width:max(150px,min(100%,var(--cw,480px),calc(100vh - var(--artH,620px))));height:auto;aspect-ratio:1;align-self:center;
         border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.45);}
     body.v-mobile #meta{margin:20px 0 0;padding-right:44px;text-align:left;}
     body.v-mobile .ttl{font-size:21px;line-height:28px;font-weight:700;}
@@ -1893,6 +1893,16 @@
     body.v-mobile.pl:is(.lb-cover,.lb-canvas){--dim:rgba(255,255,255,.36);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric.past{color:rgba(255,255,255,.58);}
     body.v-mobile.pl:is(.lb-cover,.lb-canvas) .lyric{text-shadow:0 1px 10px rgba(0,0,0,.25) !important;}
+
+    /* A wide window: the background (colour or Canvas) still fills it, but the player itself
+       (titles, controls, lyrics card, cards below) keeps a comfortable width in the middle. */
+    body.v-mobile{--cw:480px;}
+    body.v-mobile #mLine,body.v-mobile #top,body.v-mobile #bottom,body.v-mobile:not(.pl):not(.ps):not(.pq) #panel,body.v-mobile #mmore{
+        width:100%;max-width:var(--cw);margin-left:auto;margin-right:auto;}
+    body.v-mobile.pq #panel{left:max(10px,calc(50% - (var(--cw) + 40px) / 2));right:max(10px,calc(50% - (var(--cw) + 40px) / 2));}
+    body.v-mobile.pl #lyrWrap{width:100%;max-width:calc(var(--cw) + 80px);margin:0 auto;}
+    body.v-mobile #mmini>.mmw{max-width:var(--cw);}
+    html body.v-mobile:not(.canvas):not(.pl):not(.ps) #meta{width:100%;max-width:var(--cw);margin-left:auto;margin-right:auto;}
 
     /* Settings take the whole window; the header closes them. */
     body.v-mobile .shd .qtitle{visibility:hidden;}
