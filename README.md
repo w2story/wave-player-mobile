@@ -14,7 +14,7 @@ Spotify 데스크톱 앱에서 **모바일 스포티파이 화면**을 그대로
 - **한글 발음**: 일본어(kuromoji)와 영어(CMU 발음사전) 가사 아래에 한글 발음을 붙입니다. 발음 줄도 음절에 맞춰 채워집니다.
 - **후리가나**: 한자 위에 히라가나 읽기를 표시합니다.
 - **AI 번역**: Gemini API 키를 넣으면 가사 아래에 한국어 번역이 붙습니다. 곡마다 한 번 번역해서 저장합니다.
-- **가사 출처**: Spotify, LRCLIB, LyricsPlus(Apple Music 음절 가사), NetEase, Musixmatch에 동시에 요청하고 가장 좋은 가사를 고릅니다. 곡마다 출처를 직접 고정할 수도 있습니다. 한 번 받은 가사는 디스크에 저장돼 다음부터 바로 나옵니다.
+- **가사 출처**: Spotify, LRCLIB, LyricsPlus·Lyrically(Apple Music 음절 가사), NetEase, Musixmatch에 동시에 요청하고 가장 좋은 가사를 고릅니다. 음절 타이밍이 어디에도 없으면 줄 길이로 추정해서 채웁니다(설정에서 끌 수 있음). 곡마다 출처를 직접 고정할 수도 있습니다. 한 번 받은 가사는 디스크에 저장돼 다음부터 바로 나옵니다.
 - **기타**: 재생목록 시트, 아티스트·크레딧 카드, 가사 글꼴 설정(Aa), 가사 미리 보기 접기, 한국어/영어 UI, 곡 링크 복사를 지원합니다.
 
 ![가사 전체화면](docs/full-lyrics.png)
@@ -73,7 +73,7 @@ spicetify apply
 ## 크레딧
 
 - 원본: [Wave Player](https://github.com/03x1/Wave-Player) (MIT)
-- 가사: [LRCLIB](https://lrclib.net), LyricsPlus(KPoe), NetEase, Musixmatch, Spotify
+- 가사: [LRCLIB](https://lrclib.net), LyricsPlus(KPoe), [Lyrically](https://lyrics.paxsenix.org)(Paxsenix), NetEase, Musixmatch, Spotify
 - 일본어 읽기: [kuromoji.js](https://github.com/takuyaa/kuromoji.js) · 영어 발음: [CMU Pronouncing Dictionary](https://github.com/words/cmu-pronouncing-dictionary)
 - 번역: Google Gemini API (사용자 본인 키)
 

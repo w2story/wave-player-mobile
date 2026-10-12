@@ -137,13 +137,22 @@
     // Lyric sources in default order.
     // Spotify first: its lines match Spotify's playback best. Word-timed lyrics still win when
     // word-by-word sync is on (see pickLyrics), so LyricsPlus/NetEase supply those.
-    const PROVIDERS = ['spotify', 'lrclib', 'lyricsplus', 'netease', 'musixmatch'];
+    const PROVIDERS = ['spotify', 'lrclib', 'lyricsplus', 'lyrically', 'netease', 'musixmatch'];
 
     // Saved order, with unknown names dropped and new sources appended.
     const provOrder = (() => {
         // One-time reset to the new default order; after that the saved order is kept.
         if (localStorage.getItem('wp7-prov-v') !== '2') {
-            try { localStorage.setItem('wp7-prov', PROVIDERS.join(',')); localStorage.setItem('wp7-prov-v', '2'); } catch {}
+            try { localStorage.setItem('wp7-prov', PROVIDERS.join(',')); localStorage.setItem('wp7-prov-v', '3'); } catch {}
+        }
+        // Lyrically arrived later: slot it in after LyricsPlus, keeping the rest of the saved order.
+        if (localStorage.getItem('wp7-prov-v') !== '3') {
+            try {
+                const s = (localStorage.getItem('wp7-prov') || '').split(',').filter(Boolean);
+                if (!s.includes('lyrically')) s.splice(s.includes('lyricsplus') ? s.indexOf('lyricsplus') + 1 : s.length, 0, 'lyrically');
+                localStorage.setItem('wp7-prov', s.join(','));
+                localStorage.setItem('wp7-prov-v', '3');
+            } catch {}
         }
         const saved = (localStorage.getItem('wp7-prov') || '').split(',').filter(p => PROVIDERS.includes(p));
         return [...saved, ...PROVIDERS.filter(p => !saved.includes(p))];
@@ -151,6 +160,7 @@
     const provOff  = new Set((localStorage.getItem('wp7-prov-off') || '').split(',').filter(Boolean));
     let   mxmToken = localStorage.getItem('wp7-mxm') || '';
     let   karaoke  = localStorage.getItem('wp7-kara') !== 'false';
+    let   estOn    = localStorage.getItem('wp7-est') !== 'false';    // guess word timings for line-synced lyrics
     let   pronJa   = localStorage.getItem('wp7-pron-ja') !== 'false';
     let   pronEn   = localStorage.getItem('wp7-pron-en') !== 'false';
     let   transOn  = localStorage.getItem('wp7-trans') === 'true';
@@ -225,7 +235,8 @@
         'Hides the cover and controls. Space plays and pauses, the arrow keys skip 5 seconds.': '커버와 컨트롤을 숨깁니다. 스페이스로 재생/일시정지, 화살표로 5초 이동합니다.',
         'Spotify\'s looping video for songs that have one. Other songs keep the cover.': 'Canvas 영상이 있는 곡은 영상을, 없는 곡은 커버를 보여줍니다.',
         'Controls fade after a few seconds without the mouse moving, and come back when it does.': '마우스를 몇 초간 움직이지 않으면 컨트롤이 사라지고, 움직이면 다시 나타납니다.',
-        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, NetEase and Musixmatch are the ones that carry word timings.': '위에서부터 차례로 찾습니다. 음절 타이밍은 LyricsPlus(Apple Music 등), NetEase, Musixmatch에 있습니다.',
+        'Sources are tried top to bottom until one has synced lyrics. LyricsPlus, Lyrically, NetEase and Musixmatch are the ones that carry word timings. When none has them, word timings are estimated from the line.': '위에서부터 차례로 찾습니다. 음절 타이밍은 LyricsPlus·Lyrically(Apple Music), NetEase, Musixmatch에 있습니다. 어디에도 없으면 줄 길이로 음절 타이밍을 추정합니다.',
+        'Estimate when missing': '없으면 추정해서 채우기', 'line synced · estimated': '줄 싱크 · 음절 추정',
         'Each view remembers the size you resize it to. Reset puts them all back.': '보기마다 조절한 창 크기를 기억합니다. 초기화하면 기본 크기로 돌아갑니다.',
         'Lines are translated once per song and kept with the lyrics. Get a free key at Google AI Studio.': '곡마다 한 번 번역해서 가사와 함께 저장합니다. 키는 Google AI Studio에서 무료로 받을 수 있습니다.',
         'Applies the next time the player opens.': '플레이어를 다시 열면 적용됩니다.',
@@ -255,7 +266,7 @@
         [/^Lyrics from (.+) for this song$/, m => `이 곡은 ${m[1]} 가사를 사용합니다`],
         [/^([\d,.]+) monthly listeners$/, m => `월별 청취자 ${m[1]}명`],
         [/^(✓ )?Automatic(?: \((.+)\))?$/, m => `${m[1] || ''}자동${m[2] ? ` (${m[2]})` : ''}`],
-        [/^(✓ )?(LyricsPlus|Spotify|LRCLIB|NetEase|Musixmatch) · (.+?)( \(.+\))?$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}${m[4] || ''}`],
+        [/^(✓ )?(LyricsPlus|Lyrically|Spotify|LRCLIB|NetEase|Musixmatch) · (.+?)( \(.+\))?$/, m => `${m[1] || ''}${m[2]} · ${tr(m[3])}${m[4] || ''}`],
         [/^(.+ • .+)$/, m => m[1].split(' • ').map(tr).join(' • ')],
         [/^Update available: (.+)$/, m => `새 버전이 있습니다: ${m[1]}`],
         [/^Up to date \((.+)\)$/, m => `최신 버전입니다 (${m[1]})`],
@@ -420,6 +431,28 @@
     const titleOf  = t => t?.name || t?.metadata?.title || '';
     const artistOf = t => t?.artists?.[0]?.name || t?.metadata?.artist_name || '';
     const albumOf  = t => t?.album?.name || t?.metadata?.album_title || '';
+    // "Song - 2008 Remastered", "Song (feat. X)" -> "Song". Lyric servers match the bare title better.
+    const cleanTitle = s => String(s || '')
+        .replace(/\s+-\s+(?=[^-]*\b(remaster|remastered|version|ver\.|live|mix|remix|edit|mono|stereo|from|feat|acoustic|demo|bonus)\b).*$/i, '')
+        .replace(/\s*[(\[](feat\.?|ft\.?|with|from|prod\.?)\s[^)\]]*[)\]]/ig, '')
+        .replace(/\s*[(\[][^)\]]*\bremaster(ed)?\b[^)\]]*[)\]]/ig, '')
+        .trim() || String(s || '');
+
+    // JSON with a time limit. A 404 means "no lyrics" (null); a network or CORS failure goes
+    // through Spotify's own client instead, and if that fails too the error is thrown so the
+    // miss isn't remembered.
+    async function getJson(url, ms = 6000) {
+        const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), ms);
+        try {
+            const res = await fetch(url, { signal: ctl.signal });
+            if (res.status === 404) return null;
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return await res.json();
+        } catch (e) {
+            if (ctl.signal.aborted || /^HTTP/.test(e?.message)) throw e;
+            return Spicetify.CosmosAsync.get(url);
+        } finally { clearTimeout(tm); }
+    }
 
     /* Parsers */
 
@@ -546,10 +579,18 @@
             }));
         } catch {}
         if (!hit?.syncedLyrics && !hit?.plainLyrics) {
-            try {
-                const list = await cos('https://lrclib.net/api/search?' + new URLSearchParams(base));
-                if (Array.isArray(list)) hit = list.find(x => x.syncedLyrics) || list[0];
-            } catch {}
+            const want = secs(track);
+            const near = x => !want || !x.duration || Math.abs(x.duration - want) <= 4;
+            for (const track_name of [...new Set([base.track_name, cleanTitle(base.track_name)])]) {
+                try {
+                    const list = await cos('https://lrclib.net/api/search?' + new URLSearchParams({ ...base, track_name }));
+                    if (!Array.isArray(list) || !list.length) continue;
+                    // Word-tagged lyrics first, then synced, among versions of about the same length.
+                    const ok = list.filter(near);
+                    hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || list.find(x => x.syncedLyrics) || list[0];
+                    if (hit) break;
+                } catch {}
+            }
         }
 
         if (hit?.syncedLyrics) {
@@ -612,20 +653,19 @@
     async function fromLyricsPlus(track) {
         const title = titleOf(track), artist = artistOf(track);
         if (!title || !artist) return null;
-        const q = new URLSearchParams({ title, artist });
-        if (albumOf(track)) q.set('album', albumOf(track));
-        if (secs(track)) q.set('duration', String(secs(track)));
-        let j = null;
-        for (const base of KPOE) {
-            try {
-                const ctl = new AbortController(), tm = setTimeout(() => ctl.abort(), 6000);
-                const res = await fetch(`${base}/v2/lyrics/get?${q}`, { signal: ctl.signal }).finally(() => clearTimeout(tm));
-                if (res.status === 404) return null;        // answered: no lyrics
-                if (!res.ok) continue;
-                j = await res.json();
-                break;
-            } catch {}
-        }
+        const ask = async t => {
+            const q = new URLSearchParams({ title: t, artist });
+            if (albumOf(track)) q.set('album', albumOf(track));
+            if (secs(track)) q.set('duration', String(secs(track)));
+            let err = null;
+            for (const base of KPOE) {
+                try { return await getJson(`${base}/v2/lyrics/get?${q}`, 5000); }   // null: answered, none
+                catch (e) { err = e; }
+            }
+            throw err || new Error('unreachable');
+        };
+        let j = await ask(title);
+        if (!j?.lyrics?.length && cleanTitle(title) !== title) j = await ask(cleanTitle(title));
         const raw = Array.isArray(j?.lyrics) ? j.lyrics : Array.isArray(j?.data?.lyrics) ? j.data.lyrics : null;
         if (!raw?.length) return null;
         const type = String(j.type || '').toLowerCase();
@@ -659,6 +699,81 @@
         return { synced, lines, via: j?.metadata?.source || null };
     }
 
+    // Lyrically (lyrics.paxsenix.org): Apple Music's syllable lyrics by Apple track id.
+    // The id comes from the iTunes Search API, matched on title, artist and length.
+    const normName = s => cleanTitle(s).toLowerCase().normalize('NFKC').replace(/[^\p{L}\p{N}]+/gu, '');
+    async function fromLyrically(track) {
+        const title = titleOf(track), artist = artistOf(track);
+        if (!title || !artist) return null;
+        const s = await getJson('https://itunes.apple.com/search?' + new URLSearchParams({
+            term: `${cleanTitle(title)} ${artist}`, entity: 'song', media: 'music', limit: '15',
+        }), 5000);
+        const want = msOf(track), nt = normName(title), na = normName(artist);
+        const score = x => {
+            const t = normName(x.trackName || ''), a = normName(x.artistName || '');
+            let v = 0;
+            if (t === nt) v += 4; else if (t.includes(nt) || nt.includes(t)) v += 2; else return -1;
+            if (a === na) v += 3; else if (a.includes(na) || na.includes(a)) v += 2; else return -1;
+            const dd = want && x.trackTimeMillis ? Math.abs(x.trackTimeMillis - want) : 0;
+            if (dd > 10000) return -1;
+            return v - dd / 4000;
+        };
+        const best = (s?.results || []).map(x => [score(x), x]).filter(([v]) => v >= 0).sort((a, b) => b[0] - a[0])[0]?.[1];
+        if (!best?.trackId) return null;
+        const j = await getJson(`https://lyrics.paxsenix.org/apple-music/lyrics?id=${best.trackId}&v=2`, 7000);
+        return j ? parsePaxsenix(j) : null;
+    }
+
+    // Paxsenix replies: lines with a timestamp/endtime and a "text" list of syllables; a syllable
+    // with part:true runs straight into the next one (no space). Older and newer shapes both read.
+    function parsePaxsenix(j) {
+        const d = j?.data && !Array.isArray(j.data) ? j.data : j;
+        const raw = [d?.content, d?.lines, d?.lyrics, d?.data].find(Array.isArray);
+        if (!raw?.length) return null;
+        const pick = (o, ...k) => { for (const n of k) if (o?.[n] != null) return o[n]; return undefined; };
+        const lines = [];
+        for (const e of raw) {
+            if (!e) continue;
+            const t = kpoeMs(pick(e, 'timestamp', 'time', 'startTime', 'start', 'startTimeMs'));
+            const end = kpoeMs(pick(e, 'endtime', 'endTime', 'end', 'endTimeMs'), 0);
+            const sylRaw = Array.isArray(e.text) ? e.text : [e.syllables, e.words, e.syllabus].find(Array.isArray) || [];
+            const syl = sylRaw.filter(x => x && typeof x === 'object' && !x.background && !x.isBackground);
+            let text = typeof e.text === 'string' ? e.text.trim() : typeof e.line === 'string' ? e.line.trim() : '';
+            const words = [];
+            if (syl.length) {
+                let built = '';
+                syl.forEach((x, i) => {
+                    let w = String(x.text ?? x.word ?? '');
+                    if (!w.trim()) return;
+                    // Spaces either come with the text or are implied by part:false.
+                    if (!/\s$/.test(w) && x.part === false && i < syl.length - 1) w += ' ';
+                    const st = kpoeMs(pick(x, 'timestamp', 'time', 'startTime', 'start'), t);
+                    const en = kpoeMs(pick(x, 'endtime', 'endTime', 'end'), 0);
+                    words.push({ t: st, d: en > st ? en - st : null, text: w });
+                    built += w;
+                });
+                if (!text) text = built.trim();
+                // Without part flags, the line text tells where the spaces go.
+                if (words.length && !syl.some(x => x.part != null) && !/\s/.test(built.trim()) && /\s/.test(text)) {
+                    let at = 0;
+                    for (let i = 0; i < words.length; i++) {
+                        const core = words[i].text.trim(), k = text.indexOf(core, at);
+                        if (k > at && i) words[i - 1].text += text.slice(at, k);
+                        at = k >= 0 ? k + core.length : at;
+                    }
+                }
+            }
+            if (!text) { lines.push(mkLine(t, '')); continue; }
+            const ws = words.length > 1 ? words : null;
+            if (ws) ws[ws.length - 1].text = ws[ws.length - 1].text.trimEnd();
+            lines.push(mkLine(t, text, ws, end > t ? end - t : undefined));
+        }
+        if (!lines.some(l => l.text)) return null;
+        const type = String(d.type || d.syncType || '').toLowerCase();
+        const synced = !/static|unsynced|plain|none/.test(type) && lines.some(l => l.t > 0);
+        return { synced, lines, via: 'Apple Music' };
+    }
+
     // Musixmatch: only with a user token from Settings.
     async function fromMusixmatch(track) {
         if (!mxmToken || !titleOf(track)) return null;
@@ -689,9 +804,9 @@
         return null;
     }
 
-    const PROV_NAMES = { lyricsplus: 'LyricsPlus', spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
+    const PROV_NAMES = { lyricsplus: 'LyricsPlus', lyrically: 'Lyrically', spotify: 'Spotify', lrclib: 'LRCLIB', netease: 'NetEase', musixmatch: 'Musixmatch' };
     const SOURCES = {
-        lyricsplus: fromLyricsPlus,
+        lyricsplus: fromLyricsPlus, lyrically: fromLyrically,
         spotify: fromSpotify, lrclib: fromLrclib,
         netease: fromNetease, musixmatch: fromMusixmatch,
     };
@@ -1050,7 +1165,8 @@
     const SOURCE_TIMEOUT = 8000;
     const HIT_TTL  = 30 * 864e5;    // keep found lyrics a month
     const MISS_TTL = 3 * 864e5;     // retry "not found" after three days
-    const TIMED_OUT = Symbol('timeout');
+    const TIMED_OUT = Symbol('timeout');           // also: the source failed; nothing is remembered
+    const CACHE_EPOCH = Date.UTC(2026, 9, 13);
     const lyricSets = new Map();    // uri -> { results: {name: {r, at}}, pending: Set, done }
 
     // Empty lines are end markers: they end the line before them, then go.
@@ -1076,6 +1192,40 @@
             if (next && next.t - end >= INTERLUDE) out.push({ t: end, d: next.t - end, text: '', words: null, dots: true });
         });
         lines.splice(0, lines.length, ...out);
+    }
+
+    // Line-synced lyrics get guessed word timings (kept apart in .ew, so real ones still win):
+    // the line's sung part is split by syllables, an English word counting its vowel groups and
+    // each Korean, Japanese or Chinese character counting one.
+    const CJK = '\\u3040-\\u30ff\\u3400-\\u9fff\\uf900-\\ufaff\\uac00-\\ud7af';
+    const TOKEN_RE = new RegExp(`[${CJK}][ぁぃぅぇぉゃゅょゎっァィゥェォャュョヮッー]*\\s*|[^\\s${CJK}]+\\s*`, 'g');
+    const CJK_RE = new RegExp(`[${CJK}]`);
+    const sylCount = tok => {
+        if (CJK_RE.test(tok)) return 1;
+        const w = tok.trim().toLowerCase().replace(/[^a-zà-ÿ']/g, '');
+        const n = (w.match(/[aeiouyà-ÿ]+/g) || []).length;
+        // A silent final e ("made", "time") isn't a syllable of its own.
+        return Math.max(1, n - (n > 1 && /[^aeiouy]e$/.test(w) ? 1 : 0));
+    };
+    function estimateWords(r) {
+        if (!r?.synced || r.karaoke || r.est) return;
+        for (const l of r.lines) {
+            if (l.dots || !l.text || l.words || !(l.d > 0)) continue;
+            const lead = l.text.match(/^\s*/)[0].length;
+            const toks = l.text.slice(lead).match(TOKEN_RE) || [];
+            if (!toks.length) continue;
+            const ws = toks.map(sylCount), total = ws.reduce((a, b) => a + b, 0);
+            // About 0.33s a syllable, never past the line's slot.
+            const sing = Math.min(l.d * 0.92, total * 330 + 300);
+            let acc = 0;
+            l.ew = toks.map((text, i) => {
+                const w = { t: Math.round(l.t + sing * acc / total), d: Math.round(sing * ws[i] / total), text };
+                acc += ws[i];
+                return w;
+            });
+            l.ew[l.ew.length - 1].text = l.ew[l.ew.length - 1].text.trimEnd();
+        }
+        r.est = true;
     }
 
     // Songs the user pinned to one source ("Lyrics source" in the ⋯ menu).
@@ -1154,7 +1304,7 @@
             for (const name of missing) {
                 set.pending.add(name);
                 const timer = new Promise(res => setTimeout(() => res(TIMED_OUT), SOURCE_TIMEOUT));
-                Promise.race([Promise.resolve().then(() => SOURCES[name](track)).catch(() => null), timer]).then(r => {
+                Promise.race([Promise.resolve().then(() => SOURCES[name](track)).catch(() => TIMED_OUT), timer]).then(r => {
                     set.pending.delete(name);
                     if (r !== TIMED_OUT) {
                         if (r?.lines?.length) markGaps(r.lines);
@@ -1162,6 +1312,7 @@
                             fillGaps(r.lines);
                             r.karaoke = r.lines.some(l => l.words);
                             if (r.synced) addInterludes(r.lines);
+                            estimateWords(r);
                             r.source = name;
                         }
                         else r = null;
@@ -1177,7 +1328,9 @@
         set.loaded = true;
         idbGet(uri).then(saved => {
             for (const [n, e] of Object.entries(saved?.results || {})) {
-                if (e?.r) e.r.source = n;
+                // "Not found" saved before this version may have been a network failure: ask again.
+                if (!e?.r && (e?.at || 0) < CACHE_EPOCH) continue;
+                if (e?.r) { e.r.source = n; estimateWords(e.r); }
                 if (!set.results[n]) set.results[n] = e;
             }
             run();
@@ -2080,12 +2233,12 @@
         <div class="stitle">Lyric sources</div>
         <div class="scard">
           <div class="sr"><span class="slbl">Word-by-word sync</span><div class="tog ${karaoke?'on':''}" id="togKara"></div></div>
+          <div class="sr"><span class="slbl">Estimate when missing</span><div class="tog ${estOn?'on':''}" id="togEst"></div></div>
           <div id="provList"></div>
           <div class="sr"><span class="slbl">Musixmatch token</span>
             <input class="stok" id="mxmTok" type="password" placeholder="optional" value="${mxmToken.replace(/[^\w.-]/g,'')}" spellcheck="false"></div>
         </div>
-        <div class="shint">Sources are tried top to bottom until one has synced lyrics.
-          LyricsPlus, NetEase and Musixmatch are the ones that carry word timings.</div>
+        <div class="shint">Sources are tried top to bottom until one has synced lyrics. LyricsPlus, Lyrically, NetEase and Musixmatch are the ones that carry word timings. When none has them, word timings are estimated from the line.</div>
 
         <div class="stitle">Language</div>
         <div class="scard">
@@ -3276,8 +3429,9 @@ void main() {
                 if (!e) return 'not asked';
                 const r = e.r;
                 const how = !r ? 'not found' : r.karaoke ? 'word synced' : r.synced ? 'line synced' : 'not synced';
+                const est = r && !r.karaoke && r.est && estOn && karaoke ? ' · estimated' : '';
                 const via = r?.via ? String(r.via).replace(/^q?apple$/i, 'Apple Music') : '';
-                return via ? `${how} (${via})` : how;
+                return via ? `${how}${est} (${via})` : how + est;
             };
             const shown = currentLyrics?.source;
             renderMenu([
@@ -3385,6 +3539,7 @@ void main() {
             return out + esc(text.slice(i));
         }
 
+        const wordsOf = l => l?.words || (estOn ? l?.ew : null) || null;
         function renderLyrics() {
             lyr.active = null;
             lyr.els = [];
@@ -3393,13 +3548,13 @@ void main() {
                 el.lyrScroll.innerHTML = `<div class="status">${I_NO_LYR}<div class="msg">No lyrics available</div></div>`;
                 return;
             }
-            const kara = karaoke && currentLyrics.karaoke;
+            const kara = karaoke && (currentLyrics.karaoke || (estOn && currentLyrics.est));
             el.lyrScroll.innerHTML = currentLyrics.lines.map(l => {
                 if (l.dots) return `<div class="lyric dots" data-t="${l.t}"><span class="dt"></span><span class="dt"></span><span class="dt"></span></div>`;
-                const words = kara && l.words;
+                const words = kara && wordsOf(l);
                 // Word spans are placed in the line's text so furigana can sit inside them.
                 let cur = 0;
-                const inner = words ? l.words.map(w => {
+                const inner = words ? words.map(w => {
                     const core = w.text.trim(), lead = w.text.length - w.text.trimStart().length;
                     let at = core ? l.text.indexOf(core, cur) : cur;
                     if (at < 0) at = cur;
@@ -3692,7 +3847,7 @@ void main() {
             }
 
             // Word-by-word fill.
-            const words = lyr.active?.classList.contains('kara') ? lines[ai]?.words : null;
+            const words = lyr.active?.classList.contains('kara') ? wordsOf(lines[ai]) : null;
             if (!words?.length) return;
             const spans = lyr.active.children, mSpans = el.mLine.firstChild?.children || [];
             let wi = -1;
@@ -3867,6 +4022,14 @@ void main() {
             refreshPron();
         };
         el.togPronEn.onclick = togPron('en', el.togPronEn);
+        el.togEst.onclick = () => {
+            estOn = !estOn;
+            el.togEst.classList.toggle('on', estOn);
+            localStorage.setItem('wp7-est', estOn);
+            renderLyrics();
+            lyr.idx = -1;
+            repick();
+        };
         el.togKara.onclick = () => {
             karaoke = !karaoke;
             el.togKara.classList.toggle('on', karaoke);
