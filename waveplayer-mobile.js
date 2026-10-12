@@ -1695,13 +1695,14 @@
     #mHeart.on{color:#1ed760;background:none;}
 
     body.v-mobile #bottom{order:2;}
-    body.v-mobile #prog{display:grid;grid-template-columns:1fr 1fr;row-gap:2px;margin:14px 0 0;}
+    body.v-mobile #prog{display:grid;grid-template-columns:1fr 1fr;row-gap:2px;margin:10px 0 0;}
     body.v-mobile #bar{grid-column:1/3;grid-row:1;}
     body.v-mobile #tEl{grid-row:2;grid-column:1;}
     body.v-mobile #tRem{grid-row:2;grid-column:2;justify-self:end;}
     body.v-mobile .tm{font-size:11px;}
-    body.v-mobile #ctrls{flex-wrap:wrap;height:auto;margin:4px 0 0;row-gap:2px;}
-    body.v-mobile .grp.c{order:0;flex:1 0 100%;justify-content:space-between;gap:0;height:66px;}
+    body.v-mobile #ctrls{flex-wrap:wrap;height:auto;margin:2px 0 0;row-gap:0;}
+    body.v-mobile .grp.c{order:0;flex:1 0 100%;justify-content:space-between;gap:0;height:60px;}
+    body.v-mobile .grp.l .cb,body.v-mobile .grp.r .cb{height:30px;}
     body.v-mobile .grp.l{order:1;margin-left:-8px;}
     body.v-mobile .grp.r{order:2;margin-left:auto;margin-right:-8px;}
     body.v-mobile .ms{display:grid;position:relative;width:40px;color:rgba(255,255,255,.72);}
@@ -1717,7 +1718,7 @@
     body.v-mobile #bPlay svg{width:26px;height:26px;filter:none;}
 
     /* Lyrics card */
-    body.v-mobile #panel{display:flex;order:3;flex:1;min-height:190px;margin:12px 0 0;border-radius:14px;
+    body.v-mobile #panel{display:flex;order:3;flex:1;min-height:190px;margin:8px 0 0;border-radius:14px;
         background:var(--lyrbg,#5b5b68);overflow:hidden;transition:background-color .6s ease;}
     body.v-mobile:not(.p) #mlh{display:flex;align-items:center;justify-content:space-between;
         padding:12px 12px 0 18px;font-size:15px;font-weight:700;flex:none;cursor:pointer;}
@@ -1753,8 +1754,8 @@
     /* With the cover: cover, current line, then titles, as on the phone. */
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #top{display:contents;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #artBox{order:1;margin-top:8px;}
-    body.v-mobile:not(.canvas):not(.pl):not(.ps) #mLine{display:flex;order:2;flex:none;min-height:84px;align-items:center;
-        padding:14px 4px;font-size:calc(var(--lsz,24px) * .78);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);color:#fff;white-space:pre-wrap;}
+    body.v-mobile:not(.canvas):not(.pl):not(.ps) #mLine{display:flex;order:2;flex:none;min-height:66px;align-items:center;
+        padding:10px 4px;font-size:calc(var(--lsz,24px) * .78);font-family:var(--lfont,inherit);font-weight:var(--lw,700);line-height:var(--llh,1.3);color:#fff;white-space:pre-wrap;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #meta{order:3;margin:0;flex:none;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) .ttl{font-size:23px;line-height:30px;}
     body.v-mobile:not(.canvas):not(.pl):not(.ps) #bottom{order:4;}
