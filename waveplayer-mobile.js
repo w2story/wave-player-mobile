@@ -2421,7 +2421,9 @@
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
-            (view === 'mobile' && (panel === 'lyrics' ? ['canvas', 'auto', undefined].includes(lf.bg) : (!cvHidden && (!panel || panel === 'queue'))));
+            (view === 'mobile' && (panel === 'lyrics'
+                ? lf.bg === 'canvas' || ((lf.bg || 'auto') === 'auto' && !cvHidden)
+                : (!cvHidden && (!panel || panel === 'queue'))));
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -3526,7 +3528,8 @@ void main() {
             const want = f.q ? `@import url('https://fonts.googleapis.com/css2?family=${f.q}&display=swap');` : '';
             if (st.textContent !== want) st.textContent = want;
             // Full lyrics background.
-            const bg = lf.bg || 'auto', look = bg === 'auto' ? 'canvas' : bg;
+            // Auto follows the cover/Canvas choice made by clicking the cover.
+            const bg = lf.bg || 'auto', look = bg === 'auto' ? (cvHidden ? 'cover' : 'canvas') : bg;
             for (const b of ['color', 'cover', 'canvas']) body.classList.toggle(`lb-${b}`, look === b);
             if (view === 'mobile' && panel === 'lyrics') {
                 if (withCanvas() && canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
@@ -3927,6 +3930,7 @@ void main() {
         function setCvHidden(h) {
             cvHidden = h;
             localStorage.setItem('wp7-cv-hidden', h);
+            applyFont();
             if (h) {
                 body.classList.remove('canvas');
                 el.xVid.pause();
