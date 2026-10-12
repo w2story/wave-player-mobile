@@ -783,6 +783,8 @@
                 ...base, album_name: albumOf(track), duration: String(secs(track)),
             }));
         } catch {}
+        // A version of another length (a live or cover take) is only kept as a last resort.
+        let loose = null;
         if (!hit?.syncedLyrics && !hit?.plainLyrics) {
             const want = secs(track);
             const near = x => !want || !x.duration || Math.abs(x.duration - want) <= 4;
@@ -792,15 +794,16 @@
                     if (!Array.isArray(list) || !list.length) continue;
                     // Word-tagged lyrics first, then synced, among versions of about the same length.
                     const ok = list.filter(near);
-                    hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || list.find(x => x.syncedLyrics) || list[0];
+                    hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || ok[0];
+                    loose = loose || list.find(x => x.syncedLyrics) || list[0];
                     if (hit) break;
                 } catch {}
             }
         }
-        // Last try: the title alone, since LRCLIB may list the song under another spelling of
-        // the artist or a longer title ("sweet little kitty (낭만고양이)" by CHERRYFILTER). Only
+        // Then the title alone, since LRCLIB may list the song under another spelling of the
+        // artist or a longer title ("sweet little kitty (낭만고양이)" by CHERRYFILTER). Only
         // versions of the same length whose title contains ours, or is contained in it, count.
-        if (!hit?.syncedLyrics && !hit?.plainLyrics && secs(track)) {
+        if (!hit?.syncedLyrics && secs(track)) {
             const norm = s => String(s || '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, '');
             const want = norm(cleanTitle(base.track_name));
             try {
@@ -809,9 +812,10 @@
                     const t = norm(x.trackName);
                     return want && t && Math.abs((x.duration || 0) - secs(track)) <= 4 && (t.includes(want) || want.includes(t));
                 }).sort((a, b) => Math.abs(a.duration - secs(track)) - Math.abs(b.duration - secs(track)));
-                hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || ok[0] || hit;
+                hit = ok.find(x => /<\d+:\d+/.test(x.syncedLyrics || '')) || ok.find(x => x.syncedLyrics) || hit || ok[0];
             } catch {}
         }
+        hit = hit || loose;
 
         if (hit?.syncedLyrics) {
             const lines = parseLrc(hit.syncedLyrics);
@@ -1613,6 +1617,8 @@
             for (const [n, e] of Object.entries(saved?.results || {})) {
                 // "Not found" saved before this version may have been a network failure: ask again.
                 if (!e?.r && (e?.at || 0) < CACHE_EPOCH) continue;
+                // LRCLIB answers without timings from before the better search: ask again.
+                if (n === 'lrclib' && e?.r && !e.r.synced && (e.at || 0) < CACHE_EPOCH) continue;
                 if (e?.r) { e.r.source = n; estimateWords(e.r); }
                 if (!set.results[n]) set.results[n] = e;
             }
