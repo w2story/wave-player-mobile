@@ -1646,8 +1646,8 @@
     #mlh .aa{width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,.22);color:#fff;margin-right:8px;}
     #mlh #mHide{margin-right:8px;}
     #mlh .rt{display:flex;align-items:center;}
-    #mFontH{display:none;}
-    body.v-mobile.pl #mFontH{display:grid;}
+    #mFontH,#mListH{display:none;}
+    body.v-mobile.pl #mFontH,body.v-mobile.pl #mListH{display:grid;}
 
     #toast{position:fixed;left:50%;bottom:14px;z-index:30;transform:translate(-50%,8px);opacity:0;
         pointer-events:none;font-size:12.5px;font-weight:500;padding:6px 12px;border-radius:999px;
@@ -1671,6 +1671,15 @@
     body.v-mobile #mbg{display:block;}
     body.v-mobile.pl #mbg{background:var(--lyrbg,#5b5b68);}
     body.v-mobile #bg,body.v-mobile #grain,body.v-mobile #wc,body.v-mobile #bDots,body.v-mobile #mini{display:none;}
+    /* Moving cover background, as in Apple Music: the cover's colours swirling slowly behind
+       the player whenever no Canvas is showing (main screen and full lyrics). */
+    html body.v-mobile:not(.canvas):not(.ps):not(.pl) #bg,
+    html body.v-mobile.pl.lb-cover #bg,html body.v-mobile.pl.lb-canvas:not(.canvas) #bg{display:block;}
+    html body.v-mobile:not(.canvas):not(.pl) #mbg{
+        background:linear-gradient(180deg,rgba(0,0,0,.12) 0,rgba(0,0,0,.42) 100vh,#121212 calc(100vh + 180px));}
+    html body.v-mobile.pl.lb-cover #xbg,html body.v-mobile.pl.lb-canvas:not(.canvas) #xbg{display:none;}
+    html body.v-mobile.pl.lb-cover #mbg,html body.v-mobile.pl.lb-canvas:not(.canvas) #mbg{display:block;height:100vh;
+        background:linear-gradient(180deg,rgba(0,0,0,.5) 0,rgba(0,0,0,.3) 22%,rgba(0,0,0,.3) 70%,rgba(0,0,0,.6) 100%);}
     body.v-full #wMob{display:none;}
     body.v-mobile{--dim:rgba(0,0,0,.58);}
     body.v-mobile #main{padding:0 20px 14px;}
@@ -1980,6 +1989,7 @@
     <button class="wb" id="mBack" title="Cover view" aria-label="Cover view">${I_DOWN}</button>
     <div class="mt" id="mTitle">Now Playing</div>
     <button class="wb aa" id="mFontH" title="Lyrics font" aria-label="Lyrics font">Aa</button>
+    <button class="wb" id="mListH" title="Playing Next" aria-label="Playing Next">${I_LIST}</button>
     <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
     <button class="wb" id="mClose" title="Close player" aria-label="Close player">${I_X}</button>
   </div>
@@ -2423,7 +2433,14 @@
             panel = null;
             layout();
         };
-        const togglePanel = p => { panel = panel === p ? null : p; layout(); };
+        const togglePanel = p => { queueFrom = null; panel = panel === p ? null : p; layout(); };
+        // The queue opened from the full lyrics returns to them when it closes.
+        let queueFrom = null;
+        function closePanel() {
+            panel = panel === 'queue' && queueFrom === 'lyrics' ? 'lyrics' : null;
+            queueFrom = null;
+            layout();
+        }
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
             (view === 'mobile' && (panel === 'lyrics'
@@ -2649,7 +2666,8 @@ void main() {
         // Only while visible; one frame for reduced motion.
         const still = win.matchMedia('(prefers-reduced-motion: reduce)').matches;
         function swirlLoop() {
-            const want = gl && view !== 'expanded' && view !== 'mobile' && !hidden();
+            // Runs wherever its layer is on screen (in the phone view: the cover, not a Canvas).
+            const want = gl && view !== 'expanded' && !hidden() && win.getComputedStyle(el.bg).display !== 'none';
             if (want && still) { drawSwirl(fadeFrom ? fadeFrom + 1000 : 0); return; }
             if (want && swirlRaf === null) {
                 const frame = t => {
@@ -2718,6 +2736,7 @@ void main() {
             canvasFor = uri;
             body.classList.remove('canvas', 'hascv');
             doc.documentElement.style.removeProperty('--cvbg');
+            swirlLoop();
             el.xVid.pause();
             el.xVid.removeAttribute('src');
             el.xVid.load();
@@ -2746,6 +2765,7 @@ void main() {
             if (!withCanvas()) { el.xVid.pause(); return; }
             body.classList.add('canvas');
             sampleCanvas();
+            swirlLoop();
         });
         // Sample the bottom of the Canvas so the space under it continues in its colour.
         let sampledAt = -9;
@@ -3321,7 +3341,7 @@ void main() {
         el.qbShuf.onclick  = () => el.qShuf.onclick();
         el.qbRep.onclick   = () => el.qRep.onclick();
         el.qbTimer.onclick = () => openSleep(el.qbTimer);
-        el.mScrim.onclick  = () => { panel = null; layout(); };
+        el.mScrim.onclick  = () => closePanel();
 
         async function renderQueue() {
             paintQNow();
@@ -3536,6 +3556,7 @@ void main() {
             // Auto follows the cover/Canvas choice made by clicking the cover.
             const bg = lf.bg || 'auto', look = bg === 'auto' ? (cvHidden ? 'cover' : 'canvas') : bg;
             for (const b of ['color', 'cover', 'canvas']) body.classList.toggle(`lb-${b}`, look === b);
+            if (typeof swirlLoop === 'function') swirlLoop();
             if (view === 'mobile' && panel === 'lyrics') {
                 if (withCanvas() && canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
                 canvasPlay();
@@ -3924,7 +3945,8 @@ void main() {
         // Mobile view
         el.wMob.onclick   = () => setMode('mobile');
         // Down from the phone view goes to the cover view (artwork filling the window).
-        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('expanded'); };
+        el.mBack.onclick  = () => { if (panel) closePanel(); else setMode('expanded'); };
+        el.mListH.onclick = () => { queueFrom = 'lyrics'; panel = 'queue'; layout(); };
         el.mDots.onclick  = openMenu;
         el.mClose.onclick = closePlayer;
         el.mlh.onclick    = () => togglePanel('lyrics');
@@ -3945,6 +3967,7 @@ void main() {
                 if (el.xVid.getAttribute('src') && !el.xVid.paused) body.classList.add('canvas');
             }
             if (lyr.active) win.requestAnimationFrame(() => scrollToLine(lyr.active, false));
+            swirlLoop();
         }
         el.artBox.addEventListener('click', () => {
             if (view !== 'mobile' || panel) return;
@@ -3975,7 +3998,7 @@ void main() {
                 case ']': if (lyrOn()) nudge(250); break;
                 case 'Escape':
                     if (body.classList.contains('ov')) closePops();
-                    else if (panel) { panel = null; layout(); }
+                    else if (panel) closePanel();
                     else if (full) closeFull();
                     break;
             }
