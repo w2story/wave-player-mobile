@@ -153,6 +153,7 @@
     let   gemKey   = localStorage.getItem('wp7-gemini') || '';
     let   furiOn   = localStorage.getItem('wp7-furi') === 'true';
     let   cardOn   = localStorage.getItem('wp7-card') !== 'false';   // phone view: lyrics preview card
+    let   cvHidden = localStorage.getItem('wp7-cv-hidden') === 'true'; // phone view: cover instead of Canvas
 
     // Lyrics font (the Aa button). Web fonts come from Google Fonts; each pairs a Korean and a
     // Japanese face so both scripts match.
@@ -1669,6 +1670,9 @@
     body.v-mobile{--dim:rgba(0,0,0,.58);}
     body.v-mobile #main{padding:0 20px 14px;}
 
+    body.v-mobile:not(.p) #mBack{visibility:hidden;pointer-events:none;}
+    body.v-mobile:not(.p).canvas #artBox,body.v-mobile:not(.p).hascv #artBox{cursor:pointer;}
+    body.v-mobile:not(.p).canvas #artBox:hover,body.v-mobile:not(.p).hascv #artBox:hover{filter:brightness(1.06);}
     body.v-mobile #mhead{display:flex;align-items:center;height:52px;flex:none;order:0;margin:0 -8px;gap:4px;}
     #mhead .mt{flex:1;min-width:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:.07em;
         text-transform:uppercase;color:rgba(255,255,255,.88);}
@@ -2414,7 +2418,7 @@
         const togglePanel = p => { panel = panel === p ? null : p; layout(); };
 
         const withCanvas = () => view === 'expanded' || view === 'full' ||
-            (view === 'mobile' && (!panel || panel === 'queue' || (panel === 'lyrics' && lf.bg === 'canvas')));
+            (view === 'mobile' && (panel === 'lyrics' ? lf.bg === 'canvas' : (!cvHidden && (!panel || panel === 'queue'))));
         const closePlayer = () => { if (full) closeFull(); else try { win.close(); } catch {} };
 
         /* Titles */
@@ -2702,7 +2706,7 @@ void main() {
         async function loadCanvas(uri) {
             const token = ++canvasReq;
             canvasFor = uri;
-            body.classList.remove('canvas');
+            body.classList.remove('canvas', 'hascv');
             doc.documentElement.style.removeProperty('--cvbg');
             el.xVid.pause();
             el.xVid.removeAttribute('src');
@@ -2717,6 +2721,7 @@ void main() {
                 return;
             }
             canvasUrl = win.URL.createObjectURL(blob);
+            body.classList.add('hascv');
             el.xVid.src = canvasUrl;
             canvasPlay();
         }
@@ -2727,7 +2732,11 @@ void main() {
             if (withCanvas() && !hidden()) el.xVid.play().catch(() => {});
             else el.xVid.pause();
         }
-        el.xVid.addEventListener('playing', () => { body.classList.add('canvas'); sampleCanvas(); });
+        el.xVid.addEventListener('playing', () => {
+            if (!withCanvas()) { el.xVid.pause(); return; }
+            body.classList.add('canvas');
+            sampleCanvas();
+        });
         // Sample the bottom of the Canvas so the space under it continues in its colour.
         let sampledAt = -9;
         function sampleCanvas() {
@@ -3910,6 +3919,26 @@ void main() {
         el.mShuf.onclick  = () => el.qShuf.onclick();
         el.mRep.onclick   = () => el.qRep.onclick();
         el.mHeart.onclick = toggleHeart;
+        // Phone view: the cover toggles between the Canvas and the plain cover.
+        function setCvHidden(h) {
+            cvHidden = h;
+            localStorage.setItem('wp7-cv-hidden', h);
+            if (h) {
+                body.classList.remove('canvas');
+                el.xVid.pause();
+            } else {
+                if (canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
+                canvasPlay();
+                if (el.xVid.getAttribute('src') && !el.xVid.paused) body.classList.add('canvas');
+            }
+            if (lyr.active) win.requestAnimationFrame(() => scrollToLine(lyr.active, false));
+        }
+        el.artBox.addEventListener('click', () => {
+            if (view !== 'mobile' || panel) return;
+            if (body.classList.contains('canvas')) setCvHidden(true);
+            else if (cvHidden && body.classList.contains('hascv')) setCvHidden(false);
+            else if (cvHidden) { setCvHidden(false); }
+        });
         el.mLink.onclick = () => {
             const [, type, id] = String(currentTrackUri || '').split(':');
             if (!id || type === 'ad' || type === 'local') return;
