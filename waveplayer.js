@@ -17,9 +17,10 @@
         compact:  { w: 440, h: 192 },
         expanded: { w: 440, h: 436 },
         panel:    { w: 440, h: 620 },
+        mobile:   { w: 400, h: 820 },
     };
     const SZ_DEFAULT = JSON.parse(JSON.stringify(SZ));
-    const SZ_MIN = { compact: { w: 380, h: 180 }, expanded: { w: 320, h: 320 }, panel: { w: 360, h: 460 } };
+    const SZ_MIN = { compact: { w: 380, h: 180 }, expanded: { w: 320, h: 320 }, panel: { w: 360, h: 460 }, mobile: { w: 340, h: 600 } };
     // Sizes the user resized a view to are remembered.
     try { for (const [k, v] of Object.entries(JSON.parse(localStorage.getItem('wp7-size') || '{}'))) if (SZ[k] && v?.w && v?.h) SZ[k] = v; } catch {}
 
@@ -112,7 +113,7 @@
     ];
 
     // Settings keep their old wp7-* keys so existing installs keep them.
-    let mode         = localStorage.getItem('wp7-mode') === 'expanded' ? 'expanded' : 'compact';
+    let mode         = ['expanded', 'mobile'].includes(localStorage.getItem('wp7-mode')) ? localStorage.getItem('wp7-mode') : 'compact';
     let centerLyrics = localStorage.getItem('wp7-center') !== 'false';
     let fontSize     = parseInt(localStorage.getItem('wp7-fs') || '24');
     let canvasOn     = localStorage.getItem('wp7-canvas') !== 'false';
@@ -572,6 +573,13 @@
         (n === 0 ? '<path d="m15 9.5 5 5m0-5-5 5"/>'
                  : '<path d="M14.6 9.6a3.4 3.4 0 0 1 0 4.8"/>' + (n > 1 ? '<path d="M17.2 7a7 7 0 0 1 0 10"/>' : '') +
                    (n > 2 ? '<path d="M19.8 4.6a10.4 10.4 0 0 1 0 14.8"/>' : '')), 'st vol');
+    // Mobile view
+    const I_PHONE  = svg('<rect x="7" y="3" width="10" height="18" rx="2.4"/><path d="M10.6 17.8h2.8"/>', 'st');
+    const I_DOWN   = svg('<path d="m6 9.5 6 6 6-6"/>', 'st');
+    const I_HEART  = svg('<path d="M12 19.6s-7.6-4.6-7.6-10A4.3 4.3 0 0 1 12 7.1a4.3 4.3 0 0 1 7.6 2.5c0 5.4-7.6 10-7.6 10z"/>', 'st');
+    const I_HEARTF = svg('<path d="M12 20.2s-8.2-4.9-8.2-10.7A4.8 4.8 0 0 1 12 6.6a4.8 4.8 0 0 1 8.2 2.9c0 5.8-8.2 10.7-8.2 10.7z"/>');
+    const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
+
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
 
     const I_CLOSE   = '<svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
@@ -913,6 +921,95 @@
     .spinner{width:22px;height:22px;border:2.5px solid rgba(255,255,255,.12);
         border-top-color:rgba(255,255,255,.65);border-radius:50%;animation:spin .65s linear infinite;}
     @keyframes spin{to{transform:rotate(360deg)}}
+
+    /* Mobile: Spotify's phone Now Playing screen, with the lyrics card underneath.
+       Tapping the card (or the lyrics button) fills the window with the lyrics. */
+    #lyrScroll{position:relative;}
+    #mbg,#mhead,#mHeart,#mlh,.ms{display:none;}
+    #mbg{position:fixed;inset:0;z-index:1;
+        background:linear-gradient(180deg,var(--mtop,#3b3b44) 0,#121212 82%);}
+    body.v-mobile #mbg{display:block;}
+    body.v-mobile.pl #mbg{background:var(--lyrbg,#5b5b68);}
+    body.v-mobile #bg,body.v-mobile #grain,body.v-mobile #wc,body.v-mobile #bDots,body.v-mobile #mini{display:none;}
+    body.v-full #wMob{display:none;}
+    body.v-mobile{--dim:rgba(0,0,0,.58);}
+    body.v-mobile #main{padding:0 20px 14px;}
+
+    body.v-mobile #mhead{display:flex;align-items:center;height:52px;flex:none;order:0;margin:0 -8px;gap:4px;}
+    #mhead .mt{flex:1;min-width:0;text-align:center;font-size:12px;font-weight:700;letter-spacing:.07em;
+        text-transform:uppercase;color:rgba(255,255,255,.88);}
+    #mhead .wb{width:34px;height:32px;color:rgba(255,255,255,.85);}
+    #mhead .wb svg{width:20px;height:20px;}
+
+    body.v-mobile #top{order:1;display:flex;flex-direction:column;align-items:stretch;gap:0;padding-top:4px;}
+    body.v-mobile #artBox{width:max(150px,min(100%,calc(100vh - 520px)));height:auto;aspect-ratio:1;align-self:center;
+        border-radius:8px;box-shadow:0 10px 34px rgba(0,0,0,.45);}
+    body.v-mobile #meta{margin:20px 0 0;padding-right:44px;text-align:left;}
+    body.v-mobile .ttl{font-size:21px;line-height:28px;font-weight:700;}
+    body.v-mobile .sub{font-size:15px;line-height:20px;margin-top:2px;}
+    body.v-mobile #mHeart{display:grid;position:absolute;right:-8px;top:50%;margin-top:-17px;}
+    #mHeart.on{color:#1ed760;background:none;}
+
+    body.v-mobile #bottom{order:2;}
+    body.v-mobile #prog{display:grid;grid-template-columns:1fr 1fr;row-gap:2px;margin:14px 0 0;}
+    body.v-mobile #bar{grid-column:1/3;grid-row:1;}
+    body.v-mobile #tEl{grid-row:2;grid-column:1;}
+    body.v-mobile #tRem{grid-row:2;grid-column:2;justify-self:end;}
+    body.v-mobile .tm{font-size:11px;}
+    body.v-mobile #ctrls{flex-wrap:wrap;height:auto;margin:4px 0 0;row-gap:2px;}
+    body.v-mobile .grp.c{order:0;flex:1 0 100%;justify-content:space-between;gap:0;height:66px;}
+    body.v-mobile .grp.l{order:1;margin-left:-8px;}
+    body.v-mobile .grp.r{order:2;margin-left:auto;margin-right:-8px;}
+    body.v-mobile .ms{display:grid;position:relative;width:40px;color:rgba(255,255,255,.72);}
+    body.v-mobile .ms svg{width:20px;height:20px;filter:none;}
+    body.v-mobile .ms.on{color:#1ed760;}
+    body.v-mobile .ms.on::after{content:'';position:absolute;bottom:2px;left:50%;width:4px;height:4px;margin-left:-2px;
+        border-radius:50%;background:currentColor;}
+    body.v-mobile .ms.off{opacity:.3;}
+    .ms .bdg{position:absolute;top:4px;right:4px;font-size:8px;font-weight:800;display:none;}
+    .ms.b .bdg{display:block;}
+    body.v-mobile #bPrev svg,body.v-mobile #bNext svg{width:34px;height:34px;filter:none;}
+    body.v-mobile #bPlay{width:62px;height:62px;border-radius:50%;background:#fff;color:#000;}
+    body.v-mobile #bPlay svg{width:26px;height:26px;filter:none;}
+
+    /* Lyrics card */
+    body.v-mobile #panel{display:flex;order:3;flex:1;min-height:190px;margin:12px 0 0;border-radius:14px;
+        background:var(--lyrbg,#5b5b68);overflow:hidden;transition:background-color .6s ease;}
+    body.v-mobile:not(.p) #mlh{display:flex;align-items:center;justify-content:space-between;
+        padding:12px 12px 0 18px;font-size:15px;font-weight:700;flex:none;cursor:pointer;}
+    #mlh .wb{width:30px;height:30px;color:#fff;background:rgba(0,0,0,.22);border-radius:50%;}
+    #mlh .wb svg{width:15px;height:15px;}
+    body.v-mobile #lyrWrap{-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 40px),transparent 100%);
+        mask-image:linear-gradient(to bottom,transparent 0,#000 18px,#000 calc(100% - 40px),transparent 100%);}
+    body.v-mobile #lyrScroll{padding:12px 18px 55%;}
+    body.v-mobile .lyric{font-size:calc(var(--lsz,24px) * .9);font-weight:700;letter-spacing:-.012em;line-height:1.32;
+        padding:5px 0;text-align:left !important;transform:none !important;filter:none !important;text-shadow:none !important;
+        color:var(--dim);transition:color .3s ease;}
+    body.v-mobile .lyric.past{color:rgba(255,255,255,.78);}
+    body.v-mobile .lyric.active{color:#fff;}
+    body.v-mobile .lyric:hover{color:rgba(255,255,255,.92) !important;}
+    body.v-mobile .lyric.kara.active .w{
+        background-image:linear-gradient(90deg,#fff 0 var(--p,0%),var(--dim) var(--p,0%) 100%);}
+    body.v-mobile .status{opacity:.75;}
+
+    /* Lyrics filling the window */
+    body.v-mobile.pl #panel{background:transparent;margin:4px -20px 0;border-radius:0;}
+    body.v-mobile.pl #lyrScroll{padding:22px 24px 50%;}
+    body.v-mobile.pl .lyric{font-size:var(--lsz,24px);padding:7px 0;}
+    body.v-mobile.pl #top{flex-direction:row;align-items:center;gap:12px;padding-top:0;}
+    body.v-mobile.pl #artBox{width:46px;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.3);}
+    body.v-mobile.pl #meta{margin:0;flex:1;}
+    body.v-mobile.pl .ttl{font-size:15px;line-height:20px;}
+    body.v-mobile.pl .sub{font-size:13px;line-height:18px;}
+    body.v-mobile.pl #bottom{order:4;}
+    body.v-mobile.pl .grp.l,body.v-mobile.pl .grp.r,body.v-mobile.pl .ms{display:none;}
+    body.v-mobile.pl .grp.c{justify-content:center;gap:34px;height:62px;}
+    body.v-mobile.pl #bPlay{width:54px;height:54px;}
+
+    /* Up Next and Settings take the whole window; the header closes them. */
+    body.v-mobile.p:not(.pl) #top,body.v-mobile.p:not(.pl) #bottom{display:none;}
+    body.v-mobile .qhead .qtitle,body.v-mobile .shd .qtitle{visibility:hidden;}
+    body.v-mobile.p:not(.pl) #panel{background:transparent;border-radius:0;margin:0 -20px;min-height:0;}
     `;
 
     /* Markup: one set of elements for every view; body classes rearrange them. */
@@ -929,19 +1026,28 @@
 </div>
 <div id="xbg"><img id="xArt" alt="" draggable="false"><video id="xVid" muted loop playsinline preload="auto"></video><div id="xBlur"></div><div id="xShade"></div></div>
 <div id="grain"></div>
+<div id="mbg"></div>
 
 <div id="main">
+  <div id="mhead">
+    <button class="wb" id="mBack" title="Back" aria-label="Back">${I_DOWN}</button>
+    <div class="mt" id="mTitle">Now Playing</div>
+    <button class="wb" id="mDots" title="More" aria-label="More options">${I_DOTS}</button>
+    <button class="wb" id="mClose" title="Close player" aria-label="Close player">${I_X}</button>
+  </div>
   <div id="top">
     <div id="artBox"><img id="art" alt="Album art" draggable="false"></div>
     <div id="meta">
       <button class="wb chrome" id="mini" title="Back to mini player" aria-label="Back to mini player">${I_MINI}</button>
       <div class="ttl mq" id="ttlW"><span id="ttl">Loading…</span></div>
       <div class="sub mq" id="subW"><span id="sub">—</span></div>
+      <button class="cb" id="mHeart" title="Save to Liked Songs" aria-label="Save to Liked Songs">${I_HEART}</button>
     </div>
   </div>
 
   <div id="panel" class="nd">
     <div class="pv" id="pvLyrics">
+      <div id="mlh"><span>Lyrics</span><button class="wb" id="mLx" title="Full lyrics" aria-label="Full lyrics">${I_LXP}</button></div>
       <div id="lyrWrap"><div id="lyrScroll" class="${centerLyrics ? 'centered' : ''}" style="--lsz:${fontSize}px"></div></div>
       <div id="lyrOff" title="Lyrics timing">
         <button id="offMinus" title="Lyrics earlier" aria-label="Lyrics earlier">−</button>
@@ -1023,9 +1129,11 @@
         <button class="cb" id="bDots" title="More" aria-label="More options">${I_DOTS}</button>
       </div>
       <div class="grp c">
+        <button class="tb ms" id="mShuf" title="Shuffle" aria-label="Shuffle">${I_SHUFFLE}<span class="bdg">✦</span></button>
         <button class="tb" id="bPrev" title="Previous" aria-label="Previous">${I_REW}</button>
         <button class="tb" id="bPlay" title="Play" aria-label="Play"><svg viewBox="0 0 24 24" id="playIco">${I_PLAY3}</svg></button>
         <button class="tb" id="bNext" title="Next" aria-label="Next">${I_FF}</button>
+        <button class="tb ms" id="mRep" title="Repeat" aria-label="Repeat">${I_REPEAT}<span class="bdg">1</span></button>
       </div>
       <div class="grp r">
         <button class="cb" id="bLyr" title="Lyrics" aria-label="Lyrics">${I_LYR}</button>
@@ -1037,6 +1145,7 @@
 
 <!-- After #main: later drag regions win, so these buttons must come after it. -->
 <div id="wc" class="chrome">
+  <button class="wb" id="wMob" title="Phone view" aria-label="Phone view">${I_PHONE}</button>
   <button class="wb" id="wMin" title="Close player" aria-label="Close player">${I_MIN}</button>
   <button class="wb" id="wExp" title="Expand" aria-label="Expand">${I_EXP}</button>
   <button class="wb" id="wClose" title="Close player" aria-label="Close player">${I_X}</button>
@@ -1125,6 +1234,8 @@
 
         let view  = null;   // compact | expanded | panel | full
         let panel = null;   // null | lyrics | queue | settings
+        // Lyrics are on screen: the lyrics panel, or the card in the mobile view.
+        const lyrOn = () => panel === 'lyrics' || (view === 'mobile' && !panel);
 
         let playing = false, durMs = 0, shuffle = 0, repeat = 0, curItem = null, limits = null;
 
@@ -1209,11 +1320,14 @@
             closePops();
             if (full && lyricsOnly && !panel) panel = 'lyrics';
             body.classList.toggle('lo', full && lyricsOnly);
-            const v = full ? 'full' : panel ? 'panel' : mode;
-            body.classList.remove('v-compact', 'v-expanded', 'v-panel');
+            // The mobile view keeps its window size; panels open inside it.
+            const v = full ? 'full' : mode === 'mobile' ? 'mobile' : panel ? 'panel' : mode;
+            body.classList.remove('v-compact', 'v-expanded', 'v-panel', 'v-mobile');
             body.classList.add(`v-${v}`);
             body.classList.toggle('p', !!panel);
-            el.pvLyrics.classList.toggle('show', panel === 'lyrics');
+            body.classList.toggle('pl', panel === 'lyrics');
+            el.pvLyrics.classList.toggle('show', panel === 'lyrics' || (v === 'mobile' && !panel));
+            el.mTitle.textContent = panel === 'queue' ? 'Playing Next' : panel === 'settings' ? 'Settings' : panel === 'lyrics' ? 'Lyrics' : 'Now Playing';
             el.pvQueue.classList.toggle('show', panel === 'queue');
             el.pvSettings.classList.toggle('show', panel === 'settings');
             el.bLyr.classList.toggle('on', panel === 'lyrics');
@@ -1225,7 +1339,7 @@
             // Skip on first layout: requestWindow already sized the window.
             if (v !== view) { if (view) resize(SZ[v]); view = v; }
             if (panel === 'queue') renderQueue();
-            if (panel === 'lyrics') { lyr.idx = -1; updateLyrics(lyrPos()); }
+            if (lyrOn()) { lyr.idx = -1; updateLyrics(lyrPos()); }
             lyricsLoop();
             swirlLoop();
             if (withCanvas() && canvasFor !== currentTrackUri) loadCanvas(currentTrackUri);
@@ -1465,7 +1579,7 @@ void main() {
         // Only while visible; one frame for reduced motion.
         const still = win.matchMedia('(prefers-reduced-motion: reduce)').matches;
         function swirlLoop() {
-            const want = gl && view !== 'expanded' && !hidden();
+            const want = gl && view !== 'expanded' && view !== 'mobile' && !hidden();
             if (want && still) { drawSwirl(fadeFrom ? fadeFrom + 1000 : 0); return; }
             if (want && swirlRaf === null) {
                 const frame = t => {
@@ -1570,6 +1684,13 @@ void main() {
                 const root = doc.documentElement.style;
                 root.setProperty('--accent', `rgb(${a.r},${a.g},${a.b})`);
                 root.setProperty('--tint', `rgba(${Math.round(d.r*.45)},${Math.round(d.g*.45)},${Math.round(d.b*.45)},.6)`);
+                // Mobile: the gradient behind Now Playing, and the lyrics colour.
+                const base = d;
+                const lum = q => (0.2126*q.r + 0.7152*q.g + 0.0722*q.b) / 255;
+                const toLum = (q, L) => { const l = lum(q); return l > L ? shade(q, L / l - 1) : shade(q, (L - l) / (1 - l)); };
+                const mt = toLum(base, 0.16), lb = toLum(base, 0.27);
+                root.setProperty('--mtop', `rgb(${mt.r},${mt.g},${mt.b})`);
+                root.setProperty('--lyrbg', `rgb(${lb.r},${lb.g},${lb.b})`);
                 // Shown until the swirl draws.
                 body.style.background = `rgb(${Math.round(d.r*.3)},${Math.round(d.g*.3)},${Math.round(d.b*.3)})`;
             });
@@ -1590,6 +1711,13 @@ void main() {
             if (liked == null) liked = uri === currentTrackUri ? !!(sp.getHeart?.()) : heartState;
             heartUri = uri;
             heartState = !!liked;
+            paintHeart();
+        }
+        function paintHeart() {
+            const on = heartUri === currentTrackUri && heartState;
+            el.mHeart.classList.toggle('on', on);
+            el.mHeart.innerHTML = on ? I_HEARTF : I_HEART;
+            el.mHeart.title = el.mHeart.ariaLabel = on ? 'Remove from Liked Songs' : 'Save to Liked Songs';
         }
 
         async function toggleHeart() {
@@ -1598,6 +1726,7 @@ void main() {
             const want = !(heartUri === uri && heartState);
             heartUri = uri;
             heartState = want;
+            paintHeart();
             const api = lib();
             if (api?.add && api?.remove) {
                 try { await (want ? api.add({ uris: [uri] }) : api.remove({ uris: [uri] })); } catch {}
@@ -1688,7 +1817,7 @@ void main() {
             limits = s?.restrictions || null;
             paintModes();
             syncProgress();
-            if (panel === 'lyrics') updateLyrics(lyrPos());
+            if (lyrOn()) updateLyrics(lyrPos());
             lyricsLoop();
         }
 
@@ -1706,6 +1835,11 @@ void main() {
                 ? 'Not available during autoplay' : 'Not available for this music';
             if (el.qShuf.classList.contains('off')) el.qShuf.title = why;
             if (el.qRep.classList.contains('off'))  el.qRep.title  = why;
+            // The mobile view's own shuffle and repeat buttons follow these.
+            for (const [m, q] of [[el.mShuf, el.qShuf], [el.mRep, el.qRep]]) {
+                m.className = q.className.replace(/\bqb\b/, 'tb ms');
+                m.title = m.ariaLabel = q.title;
+            }
         }
 
         /* Progress: stepped about a pixel at a time (≤4/s), with the times. */
@@ -1925,9 +2059,10 @@ void main() {
                 '-',
                 ...SLEEP.map(([t, v]) => ({ t, f: () => setSleep(v, t) })),
                 ...(on ? ['-', { t: 'Turn off', f: () => setSleep(0) }] : []),
-            ], el.bDots);
+            ], dotsEl());
         }
 
+        const dotsEl = () => view === 'mobile' ? el.mDots : el.bDots;
         async function openMenu() {
             const item = curItem;
             await refreshHeart(currentTrackUri);
@@ -1948,7 +2083,7 @@ void main() {
                 ...(hasSleep() ? ['-', { t: sleepLabel(), sub: true, f: openSleep }] : []),
                 '-',
                 { t: 'Settings', f: () => { panel = 'settings'; layout(); } },
-            ], el.bDots);
+            ], dotsEl());
         }
         el.bDots.onclick = openMenu;
 
@@ -1970,7 +2105,7 @@ void main() {
                         toast(`Added to ${l.name}`);
                     } catch { toast('Couldn’t add to playlist'); }
                 } })) : [{ t: 'No playlists', off: true, f() {} }]),
-            ], el.bDots);
+            ], dotsEl());
         }
 
         /* Up Next */
@@ -2022,7 +2157,7 @@ void main() {
 
         // Runs only while lyrics are visible and playing.
         function lyricsLoop() {
-            const want = panel === 'lyrics' && playing && currentLyrics?.synced && !hidden();
+            const want = lyrOn() && playing && currentLyrics?.synced && !hidden();
             if (want && raf === null) {
                 // Capped near 60fps.
                 let last = 0;
@@ -2039,8 +2174,18 @@ void main() {
             }
         }
 
+        // Scrolls only the lyrics box (scrollIntoView would also move the window's layout).
+        // Centred, or a third of the way down in the mobile view, like Spotify's phone app.
+        function scrollToLine(line, smooth) {
+            const s = el.lyrScroll, k = view === 'mobile' ? .32 : .5;
+            const top = Math.max(0, line.offsetTop + line.offsetHeight / 2 - s.clientHeight * k);
+            // Snap instead of a long slow scroll.
+            const far = Math.abs(top - s.scrollTop) > s.clientHeight * 1.5;
+            s.scrollTo({ top, behavior: smooth && !far ? 'smooth' : 'auto' });
+        }
+
         function updateLyrics(pos) {
-            if (!currentLyrics?.synced || panel !== 'lyrics') return;
+            if (!currentLyrics?.synced || !lyrOn()) return;
             const lines = currentLyrics.lines;
             let ai = -1;
             for (let i = lines.length - 1; i >= 0; i--) { if (pos >= lines[i].t) { ai = i; break; } }
@@ -2060,10 +2205,7 @@ void main() {
                         line.classList.remove('past');
                         line.classList.add('active');
                         lyr.active = line;
-                        // Snap instead of a long slow scroll.
-                        const wr = el.lyrWrap.getBoundingClientRect(), lr = line.getBoundingClientRect();
-                        const off = Math.abs((lr.top + lr.height / 2) - (wr.top + wr.height / 2));
-                        line.scrollIntoView({ behavior: off > wr.height * 1.5 ? 'auto' : 'smooth', block: 'center' });
+                        scrollToLine(line, true);
                     } else {
                         line.classList.remove('active');
                         line.classList.toggle('past', i < ai);
@@ -2222,6 +2364,15 @@ void main() {
         // Toggles compact/expanded (Spotify's full screen jumps to its lyrics view).
         el.wExp.onclick = () => setMode(view === 'expanded' ? 'compact' : 'expanded');
         el.mini.onclick = () => setMode('compact');
+        // Mobile view
+        el.wMob.onclick   = () => setMode('mobile');
+        el.mBack.onclick  = () => { if (panel) { panel = null; layout(); } else setMode('compact'); };
+        el.mDots.onclick  = openMenu;
+        el.mClose.onclick = closePlayer;
+        el.mlh.onclick    = () => togglePanel('lyrics');
+        el.mShuf.onclick  = () => el.qShuf.onclick();
+        el.mRep.onclick   = () => el.qRep.onclick();
+        el.mHeart.onclick = toggleHeart;
         el.bLyr.onclick  = () => togglePanel('lyrics');
         el.bList.onclick = () => togglePanel('queue');
 
@@ -2234,9 +2385,10 @@ void main() {
                 case 'ArrowUp':   e.preventDefault(); commitVol(Math.min(100, Math.round((sp.getVolume() || 0) * 100) + 5)); break;
                 case 'ArrowDown': e.preventDefault(); commitVol(Math.max(0, Math.round((sp.getVolume() || 0) * 100) - 5)); break;
                 case 'l': case 'L': togglePanel('lyrics'); break;
+                case 'm': case 'M': if (!full) setMode(mode === 'mobile' ? 'compact' : 'mobile'); break;
                 case 'q': case 'Q': if (!full) togglePanel('queue'); break;
-                case '[': if (panel === 'lyrics') nudge(-250); break;
-                case ']': if (panel === 'lyrics') nudge(250); break;
+                case '[': if (lyrOn()) nudge(-250); break;
+                case ']': if (lyrOn()) nudge(250); break;
                 case 'Escape':
                     if (body.classList.contains('ov')) closePops();
                     else if (panel) { panel = null; layout(); }
@@ -2272,7 +2424,7 @@ void main() {
                 remeasure();
                 closePops();
                 // Re-centre the active line.
-                if (panel === 'lyrics') lyr.active?.scrollIntoView({ block: 'center' });
+                if (lyrOn() && lyr.active) scrollToLine(lyr.active, false);
             });
         });
 
