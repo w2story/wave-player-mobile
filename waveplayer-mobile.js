@@ -1237,6 +1237,7 @@
     const I_VERIFIED = '<svg viewBox="0 0 24 24" class="vf"><path fill="#4cb3ff" d="m12 1.6 2.4 1.8 3-.1.9 2.8 2.5 1.7-.9 2.9.9 2.9-2.5 1.7-.9 2.8-3-.1L12 20.4l-2.4-1.8-3 .1-.9-2.8-2.5-1.7.9-2.9-.9-2.9 2.5-1.7.9-2.8 3 .1z"/><path d="m8.2 12.2 2.6 2.6 5-5.4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
     const I_FOLD   = svg('<path d="m6 9.5 6 6 6-6"/>', 'st');     // collapse
     const I_UNFOLD = svg('<path d="m6 14.5 6-6 6 6"/>', 'st');    // expand
+    const I_LINK   = svg('<path d="M10.6 13.4a3.6 3.6 0 0 0 5.1 0l2.9-2.9a3.6 3.6 0 0 0-5.1-5.1l-1.2 1.2"/><path d="M13.4 10.6a3.6 3.6 0 0 0-5.1 0l-2.9 2.9a3.6 3.6 0 0 0 5.1 5.1l1.2-1.2"/>', 'st');
     const I_LXP    = svg('<path d="M14 4.5h5.5V10M10 19.5H4.5V14"/>', 'st');
 
     const volIcon = v => I_VOL3(v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
@@ -1680,7 +1681,17 @@
     body.v-mobile #meta{margin:20px 0 0;padding-right:44px;text-align:left;}
     body.v-mobile .ttl{font-size:21px;line-height:28px;font-weight:700;}
     body.v-mobile .sub{font-size:15px;line-height:20px;margin-top:2px;}
-    body.v-mobile #mHeart{display:grid;position:absolute;right:-8px;top:50%;margin-top:-17px;}
+    body.v-mobile #mHeart{display:grid;position:absolute;right:-8px;top:50%;margin-top:-17px;z-index:1;}
+    /* Hovering the check slides the song-link button out to its left. */
+    #mLink{display:none;}
+    body.v-mobile #mLink{display:grid;position:absolute;right:30px;top:50%;margin-top:-17px;width:36px;
+        border-radius:999px;background:rgba(255,255,255,.14);color:#fff;
+        opacity:0;transform:translateX(26px) scale(.85);pointer-events:none;
+        transition:opacity .2s ease .25s,transform .28s cubic-bezier(.3,1.3,.5,1) .25s;}
+    body.v-mobile #mLink svg{width:18px;height:18px;}
+    body.v-mobile #mHeart:hover + #mLink,body.v-mobile #mLink:hover,body.v-mobile #mLink:focus-visible{
+        opacity:1;transform:none;pointer-events:auto;transition-delay:0s;}
+    body.v-mobile #mLink:hover{background:rgba(255,255,255,.24);}
     #mHeart.on{color:#1ed760;background:none;}
 
     body.v-mobile #bottom{order:2;}
@@ -1760,13 +1771,13 @@
        taller, and the line would otherwise sit on its bright, unfaded part.
        --fy = where the lyric line ends (header 52px + the line's box, as sized below). */
     body.v-mobile.canvas:not(.pl):not(.ps) #xbg{--vh:calc(100vw * 16 / 9);bottom:auto;height:var(--vh);
-        --fy:calc(52px + clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - var(--capH,470px))));}
+        --fy:min(calc(52px + clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - var(--capH,470px)))),calc(100vw * 16 / 9 - 200px));}
     body.v-mobile.canvas #xVid{height:var(--vh);
         -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));
         mask-image:linear-gradient(to bottom,#000 0,#000 calc(var(--fy,60%) - 240px),rgba(0,0,0,.45) var(--fy,75%),transparent calc(var(--fy,75%) + 190px));}
     /* Darkened under the header, and gently behind the titles and controls. */
     body.v-mobile.canvas #xShade{display:block;background:linear-gradient(180deg,rgba(0,0,0,.55) 0,transparent 110px,
-        transparent calc(var(--fy,60%) - 300px),rgba(0,0,0,.5) calc(var(--fy,75%) - 40px),rgba(0,0,0,.25) calc(var(--fy,75%) + 160px),rgba(0,0,0,0) calc(var(--fy,75%) + 260px));}
+        transparent calc(var(--fy,60%) - 300px),rgba(0,0,0,.5) calc(var(--fy,75%) - 40px),rgba(0,0,0,.18) calc(var(--fy,75%) + 110px),rgba(0,0,0,0) calc(var(--fy,75%) + 190px));}
     /* The line sits so the controls end near the bottom of the video; the lyrics card gets the rest. */
     body.v-mobile.canvas:not(.pl):not(.ps) #mLine{display:flex;flex:none;
         height:clamp(60px,calc(100vw * 16 / 9 - 290px),calc(100vh - var(--capH,470px)));align-items:flex-end;padding:0 4px 22px;
@@ -1784,10 +1795,20 @@
     @media (prefers-reduced-motion:reduce){#mLine.kara .w{-webkit-text-fill-color:#fff;color:#fff;background-image:none;}}
 
     /* Lyrics preview folded: only its header stays; the cover (or the Canvas area) takes the room. */
-    body.v-mobile.nocard:not(.p) #panel{flex:none;min-height:0;}
+    body.v-mobile.nocard:not(.p):not(.pl):not(.ps) #panel{flex:none;min-height:0;}
     body.v-mobile.nocard:not(.p) #lyrWrap,body.v-mobile.nocard:not(.p) #lyrOff{display:none;}
     body.v-mobile.nocard:not(.p) #mlh{padding-bottom:12px;}
     body.v-mobile.nocard{--capH:360px;--artH:500px;}
+    /* The folded card sits at the bottom edge; with the cover, the free space is shared above
+       the cover and above the card so the player sits in the middle. (With a Canvas the line
+       over the video stays put, so only the card moves.) */
+    body.v-mobile.nocard:not(.p) #panel{margin-top:auto;}
+    body.v-mobile.nocard:not(.canvas):not(.p) #artBox{margin-top:auto;}
+    /* With a Canvas, the line over the video moves down so the controls meet the folded card,
+       and the fade follows it (same --fy idea as above). */
+    html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #mLine{height:max(60px,calc(100vh - 380px));}
+    /* The fade always finishes inside the video (else its bottom edge shows as a seam). */
+    html body.v-mobile.nocard.canvas:not(.p):not(.pl):not(.ps) #xbg{--fy:min(calc(52px + max(60px,calc(100vh - 380px))),calc(100vw * 16 / 9 - 200px));}
 
     /* Scrolling page: Now Playing fills the window; artist and credits cards follow it,
        and a mini header with the song and play button appears once the controls scroll away. */
@@ -1956,6 +1977,7 @@
       <div class="ttl mq" id="ttlW"><span id="ttl">Loading…</span></div>
       <div class="sub mq" id="subW"><span id="sub">—</span></div>
       <button class="cb" id="mHeart" title="Save to Liked Songs" aria-label="Save to Liked Songs">${I_HEART}</button>
+      <button class="cb" id="mLink" title="Copy Song Link" aria-label="Copy Song Link">${I_LINK}</button>
     </div>
   </div>
 
@@ -3886,6 +3908,11 @@ void main() {
         el.mShuf.onclick  = () => el.qShuf.onclick();
         el.mRep.onclick   = () => el.qRep.onclick();
         el.mHeart.onclick = toggleHeart;
+        el.mLink.onclick = () => {
+            const [, type, id] = String(currentTrackUri || '').split(':');
+            if (!id || type === 'ad' || type === 'local') return;
+            try { P.ClipboardAPI.copy(`https://open.spotify.com/${type}/${id}`); toast('Link copied'); } catch {}
+        };
         el.bLyr.onclick  = () => togglePanel('lyrics');
         el.bList.onclick = () => togglePanel('queue');
 
