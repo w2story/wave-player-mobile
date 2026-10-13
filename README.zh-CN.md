@@ -91,6 +91,12 @@
 需要 Spotify 桌面应用。以下命令会在没有 Spicetify 时一并安装。
 再次运行同一命令即可更新到最新版本。
 
+> **Windows 上请使用从 [spotify.com](https://www.spotify.com/download) 下载的 Spotify，而不是 Microsoft Store 版。**
+> Windows 会把 Store 版的应用文件还原，所以重启或 Store 更新后，播放器（以及其他所有 Spicetify 扩展）都会失效。
+> 如果 Spotify 位于 `C:\Program Files\WindowsApps`，请先卸载，再安装普通版（`winget install Spotify.Spotify`），打开一次后运行 `spicetify backup apply`。
+>
+> 如果 Spotify 自动更新后播放器消失了，再运行一次 `spicetify backup apply` 即可。
+
 **Windows（PowerShell）**
 
 ```powershell

@@ -32,6 +32,13 @@ $list = (& spicetify config extensions 2>$null) -join ' '
 if ($list -match 'waveplayer\.js') { & spicetify config extensions 'waveplayer.js-' | Out-Null }
 if ($list -notmatch [regex]::Escape($File)) { & spicetify config extensions $File | Out-Null }
 
+# Windows puts the Store app's files back, so the patch is lost after a restart or Store update.
+if (Get-AppxPackage -Name 'SpotifyAB.SpotifyMusic' -ErrorAction SilentlyContinue) {
+    Write-Host "`nThis is the Microsoft Store version of Spotify. Spicetify doesn't survive a restart on it." -ForegroundColor Yellow
+    Write-Host 'Uninstall it, install the regular version (winget install Spotify.Spotify or spotify.com/download),' -ForegroundColor Yellow
+    Write-Host "open it once, then run: spicetify backup apply`n" -ForegroundColor Yellow
+}
+
 Write-Host 'Applying to Spotify...'
 & spicetify apply
 

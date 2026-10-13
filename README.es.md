@@ -91,6 +91,12 @@ Las capturas muestran la interfaz en coreano; el reproductor sigue tu idioma (ve
 Necesitas la aplicación de escritorio de Spotify. El comando también instala Spicetify si no lo tienes.
 Ejecuta el mismo comando otra vez para actualizar a la última versión.
 
+> **En Windows, usa el Spotify de [spotify.com](https://www.spotify.com/download), no el de Microsoft Store.**
+> Windows restaura los archivos de la app de Store, así que el reproductor (y todas las demás extensiones de Spicetify) deja de funcionar tras reiniciar o tras una actualización de Store.
+> Si el tuyo está en `C:\Program Files\WindowsApps`, desinstálalo, instala la versión normal (`winget install Spotify.Spotify`), ábrela una vez y ejecuta `spicetify backup apply`.
+>
+> Si el reproductor desaparece después de que Spotify se actualice solo, vuelve a ejecutar `spicetify backup apply`.
+
 **Windows (PowerShell)**
 
 ```powershell

@@ -91,6 +91,12 @@ The screenshots show the Korean interface; the player follows your language (see
 You need the Spotify desktop app. The command below also installs Spicetify if it's missing.
 Run the same command again to update to the latest version.
 
+> **Windows: use the Spotify from [spotify.com](https://www.spotify.com/download), not the Microsoft Store one.**
+> Windows restores the Store app's files, so the player (and every other Spicetify extension) stops working after a restart or a Store update.
+> If yours is in `C:\Program Files\WindowsApps`, uninstall it, install the regular version (`winget install Spotify.Spotify`), open it once, then run `spicetify backup apply`.
+>
+> If the player disappears after Spotify updates itself, run `spicetify backup apply` again.
+
 **Windows (PowerShell)**
 
 ```powershell

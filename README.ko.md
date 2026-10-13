@@ -89,6 +89,12 @@ Spotify 데스크톱 앱에서 **모바일 스포티파이 화면**을 그대로
 Spotify 데스크톱 앱이 필요합니다. 아래 명령은 Spicetify가 없으면 함께 설치합니다.
 같은 명령을 다시 실행하면 최신 버전으로 업데이트됩니다.
 
+> **Windows에서는 Microsoft Store가 아니라 [spotify.com](https://www.spotify.com/download)에서 받은 Spotify를 쓰세요.**
+> Store 버전은 Windows가 앱 파일을 원래대로 되돌리기 때문에, 재부팅하거나 Store가 업데이트하면 플레이어(와 다른 Spicetify 확장 전부)가 꺼집니다.
+> Spotify가 `C:\Program Files\WindowsApps`에 있다면 제거하고 일반 버전을 설치(`winget install Spotify.Spotify`)한 뒤, 한 번 실행했다가 `spicetify backup apply`를 실행하세요.
+>
+> Spotify가 스스로 업데이트된 뒤 플레이어가 사라졌다면 `spicetify backup apply`를 다시 실행하면 됩니다.
+
 **Windows (PowerShell)**
 
 ```powershell
